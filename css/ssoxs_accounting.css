@@ -1,0 +1,260 @@
+/*
+ * single sign on for external services module
+ *
+ * css definitions for styling the service statistics page
+ */
+
+.ssoxs_servicebox {
+  margin-top: 20px;
+  position: relative;
+  width: 100%;
+  height: 150px;
+  color: #ffffff;
+  overflow: hidden;
+  background-color: #eceef5;
+  -webkit-border-radius: 3px;
+  -moz-border-radius: 3px;
+  border-radius: 3px;
+  -webkit-box-shadow: 0px 2px 4px #a4a4a3;
+  -moz-box-shadow: 0px 2px 4px #a4a4a3;
+  box-shadow: 0px 2px 4px #a4a4a3;
+}
+
+.ssoxs_servicebox .intro .ssoxs_table {
+  height: 110px;
+}
+
+.ssoxs_servicebox .stats .item {
+  display: inline-block;
+  text-align: center;
+  border-right: 1px solid #e1e1e1;
+  padding: 20px;
+  height: 100%;
+  color: #333333;
+}
+
+.ssoxs_servicebox .stats .last {
+  border-right: none;
+}
+
+.ssoxs_servicebox .stats .item span {
+  font-weight: bold;
+  display: block;
+  font-size: 140%;
+  margin-top: 20px;
+}
+
+.ssoxs_servicebox .positive,
+.ssoxs_servicebox .negative {
+  display: inline-block;
+  font-size: 70%;
+  padding-left: 20px;
+  margin-left: 10px;
+}
+
+.ssoxs_servicebox .positive {
+  color: #39912d;
+  background: url('../images/arrow-pos.png') no-repeat top left;
+}
+
+.ssoxs_servicebox .negative {
+  color: #c8000b;
+  background: url('../images/arrow-neg.png') no-repeat top left;
+}
+
+.ssoxs_servicebox .stats .stopped span {
+  color: #c8000b;
+}
+
+.ssoxs_servicebox .stats .active span {
+  color: #39912d;
+}
+
+.ssoxs_servicebox .stats .paused span {
+  color: #f0c874;
+}
+
+.ssoxs_servicebox .ssoxs_table a,
+.ssoxs_statbox .ssoxs_table a {
+  color: #8ab942;
+}
+
+.ssoxs_servicebox a:hover,
+.ssoxs_servicebox a:active,
+.ssoxs_servicebox a:visited {
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.ssoxs_statbox {
+  margin-top: 20px;
+  position: relative;
+  height: 300px;
+  color: #ffffff;
+  background-color: #eceef5;
+  -webkit-border-radius: 3px;
+  -moz-border-radius: 3px;
+  border-radius: 3px;
+  -webkit-box-shadow: 0px 2px 4px #a4a4a3;
+  -moz-box-shadow: 0px 2px 4px #a4a4a3;
+  box-shadow: 0px 2px 4px #a4a4a3;
+}
+
+.ssoxs_statbox .stats,
+.ssoxs_servicebox .intro {
+  float: left;
+  height: 100%;
+  width: 20%;
+  min-width: 230px;
+  overflow: hidden;
+  border-right: 1px solid #6a6a6a;
+  background: url('../images/blue-bg.png') no-repeat center top;
+}
+
+.ssoxs_statbox .stats .ssoxs_table,
+.ssoxs_statbox .chart .plot {
+  height: 260px;
+}
+
+.ssoxs_statbox .chart .geo {
+  height: 300px;
+}
+
+.ssoxs_table .title {
+  padding: 10px 20px 10px 20px;
+  font-weight: bold;
+  text-transform: uppercase;
+  text-align: center;
+  border-bottom: 1px solid #005174;
+}
+
+.ssoxs_servicebox .title {
+  background: url('../images/piechart_icon_on.png') no-repeat center left;
+}
+
+.ssoxs_jobaccounting .title {
+  background: url('../images/chart_icon_on.png') no-repeat center left;
+}
+
+.ssoxs_demographics .title {
+  background: url('../images/globe_icon_on.png') no-repeat center left;
+}
+
+.ssoxs_users .title {
+  background: url('../images/users_icon_on.png') no-repeat center left;
+}
+
+.ssoxs_table .item {
+  padding: 5px 20px 5px 20px;
+}
+
+.ssoxs_table .item.first {
+  padding-top: 10px;
+  border-top: 1px solid #38a8d3;
+}
+
+.ssoxs_table span {
+  float: right;
+  font-weight: bold;
+}
+
+.ssoxs_statbox .stats .footer,
+.ssoxs_servicebox .intro .footer {
+  height: 20px;
+  background-color: #00445f;
+  padding: 10px 20px 10px 20px;
+  font-weight: bold;
+  text-transform: uppercase;
+  color: #d6d6d6;
+}
+
+.ssoxs_statbox .chart,
+.ssoxs_servicebox .stats {
+  float: left;
+  height: 100%;
+  background-color: #eceef5;
+}
+
+.ssoxs_demographics .chart {
+  float: none;
+}
+
+.ssoxs_statbox .chart .plot {
+  position: absolute;
+  top: 0px;
+  width: 100%;
+  height: 260px;
+  z-index: 5;
+}
+
+.ssoxs_statbox .chart .overlay {
+  position: absolute;
+  top: 0px;
+  right: 0px;
+  width: 633px;
+  height: 100%;
+  display: table;
+  z-index: 4;
+}
+
+.ssoxs_overlay .cell {
+  display: table-cell;
+  color: #eceef5;
+  width: auto;
+}
+
+.ssoxs_overlay .cell:hover {
+  color: #00445f;
+  opacity: 0.5;
+  border-left: 1px solid #00445f;
+  border-right: 1px solid #00445f;
+  background-color: #a7d7e5;
+}
+
+.ssoxs_statbox .chart .ssoxs_timeline,
+.ssoxs_servicebox .stats .ssoxs_timeline {
+  position: absolute;
+  display: table;
+  table-layout: fixed;
+  height: 39px;
+  width: 80%;
+  bottom: 0px;
+  z-index: 3;
+  border-top: 1px solid #a2aab1;
+  background-color: #6a6a6a;
+  overflow: hidden;
+}
+
+.ssoxs_timeline .formitem {
+  float: left;
+  padding: 0px 10px;
+}
+
+.ssoxs_timeline .date {
+  display: table-cell;
+  padding-top: 10px;
+  text-align: center;
+  border-right: 1px solid #7f7f7f;
+}
+
+.ssoxs_timeline .date-month {
+  padding-right: 5px;
+}
+
+.ssoxs_timeline .date:hover {
+  background-color: #a7d7e5;
+}
+
+.ssoxs_timeline .date-padding {
+  padding: 0;
+}
+
+.ssoxs_timeline input[type=submit] {
+  padding: 4px 17px;
+  margin: 5px 10px !important;
+  font-size: 0.95em !important;
+  color: #000 !important;
+  -moz-border-radius: 5px !important;
+  -webkit-border-radius: 5px !important;
+  border-radius: 5px !important;
+}

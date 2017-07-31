@@ -1,0 +1,1881 @@
+<?php
+
+/**
+ * @file
+ * The main Single Sign On for eXternal Services module file.
+ *
+ * - Important helper classes and functions are loaded from
+ *   includes/ssoxs_toolkit.inc
+ */
+
+module_load_include('inc', 'ssoxs', '/includes/ssoxs_toolkit');
+
+/*-----------------------------------------------------------------
+ * Hook Implementations
+ *-----------------------------------------------------------------*/
+
+/**
+ * Implements hook_help().
+ *
+ * - displays help and module information.
+ */
+function ssoxs_help($path, $arg) {
+
+  $sitename = variable_get('site_name', 'sitename');
+  $output = '';
+  switch ($path) {
+    case 'admin/help#ssoxs':
+      $output = '<div style="padding: 0px 37px 30px 37px;">' . t('This module implements a Single Sign On for eXternal Services
+                          (SSOXS) functionality. Here, Drupal is used as central user management, authentication, authorization
+                          and accounting service for external web services. Features include:
+                          - Flexible registration of services for which to enable Single Sign On
+                          - Users can register for services on their user account page
+                          - Store SSO credentials locally or in a secure external database accessible to the service
+                          - Powerful accounting functionality to track service usage and performance') . '</div>';
+      return $output;
+
+    case 'admin/config/services/ssoxs':
+      $output = '<div style="padding: 0px 37px 0px 37px;">' . t("This page provides an overview of all external services registered
+                          to make use of the Single Sign On and accounting facility. Please use the <i>Add service</i> tab to register a
+                          new service. The <i>Operations</i> icons provide links to various administration pages of each service
+                          allowing to edit, manage registered users, view statistics and unregister the service respectively. The
+                          number of pending users for a service is displayed in red") . '</div>';
+      return $output;
+
+    case 'admin/config/services/ssoxs/settings':
+      $output = '<div style="padding: 0px 37px 0px 37px;">' . t("The Single Sign On for eXternal Services module stores user, service,
+                          and accounting information in the main site database or external database. The user information is
+                          essentially the same as the user tables in the sites database. The module takes care of automatic
+                          synchronisation of the two tables whenever there is a change in the subscription status of a sites user.
+                          The Maintenance page allows for manual synchronisation of the user tables if needed.<br/><br/>Because
+                          the user ssoxs db contains valuable information the module is equipped with a simple backup mechanism that
+                          stores the content of the database as a text .sql file in the ssoxs directory of the default files location
+                          of the Drupal installation. In case the powerful <i>backup and migrate</i> module is installed it will be used
+                          instead of the buildin backup functionality. Backups are made periodicly controlled by the Drupal cron process.
+                          Manual backups can be made at any time.<br/><br/>The SSOXS module can be configured to query a federate identity
+                          provider for user authentication and authorization information allowing users to login to the VRC and make use of the
+                          services using there own (institution) authentication information. The module uses the flexible <i>simpleSAMLphp</i>
+                          library for this task. It needs to be properly installed and accesible.") . '</div>';
+      return $output;
+
+    case 'admin/config/services/ssoxs/%/statistics':
+      $output = '<div style="padding: 0px 37px 0px 37px;">' . t("This page lists accounting statistics that were stored
+                          in the ssoxs database by the service. By default the statistics are compiled for the period ranging
+                          from the first job deposited by the service up to the present day. The 'start date' and 'End date' datepicker
+                          allows for generation of statistics for a custom time period.") . '</div>';
+      return $output;
+
+    case 'admin/config/services/ssoxs/%/jobs':
+      $output = '<div style="padding: 0px 37px 0px 37px;">' . t("List of all jobs accounted for by the service. The results can be
+                          filtered by date, status and/or user name. Most table columns are sortable by clicking on the column header. Logs
+                          available for a given job are indicated by the text balloon icon in the messages column. Click the icon to
+                          view the log. Please note that the job ID often links to the job results page but it might no longer exist.") . '</div>';
+      return $output;
+
+    case 'admin/config/services/ssoxs/%/users':
+      $output = '<div style="padding: 0px 37px 0px 37px;">' . t("Lists the users that subscribed to the service together with their subscription
+                          status and the total and active number of service submissions. The administration interface allows you to edit subscription
+                          data for every user selected. Options:<ul>
+                          <li>Tokens: if the service makes use of token based submission, the token balans for the users is shown and can be changed</li>
+                          <li>Custom attributes: if the services defines custom attributes, these are listed and can be changed</li>
+                          <li>Add new users: search for registered users using the autocompleted user search box and subscribe them to the service.
+                              This will by pass the user subscription procedure on the users 'My Services' page</li>
+                          <li>Contact: send emails to all selected users</li></ul>") . '</div>';
+      return $output;
+
+    case 'admin/config/services/ssoxs/%/delete':
+      $output = '<div style="padding: 0px 37px 0px 37px;">' . t("Delete the service entry from the service database. Optionally
+                          remove the service statistics table from the database which is not recommended as all accounting information
+                          is lost.") . '</div>';
+      return $output;
+
+    case 'admin/config/services/ssoxs/add_service':
+      $output = '<div style="padding: 0px 37px 0px 37px;">' . t("Use this form to register a new external service to make use of SSOXS.
+                          <ul><li>Use the 'basic service information' field to provide the name of your service and it's URL.
+                          Enter one or more Drupal registered users as service administrators. Subscription requests and portal status
+                          messages will be send to these persons.</li><li>Use the 'Roles' field to fine tune who is able to subscribe to
+                          and use your service based on the general 'roles' privileges system used throughout Drupal.</li><li>Indicate
+                          the attributes (user information) you need for your service to work. Respect privacy and request only what is
+                          truly needed. The user will have to agree with the data being shared</li><li>Communication between the SSOXS module
+                          and your service is secured using Blowfish encryption technology. Use the 'XML-RPC API key' field to generate
+                          your service specific API key to enable secure communication.</li><li>Use the 'Signup requirements' field to
+                          specify additional requirements you may impose on new users subscribing to your service. These can be the
+                          possession of a certificate validated on signup, approval by the service administrator, an agreement to
+                          service license terms or the use of a Token based submission system.</li><li>If your service uses any
+                          additional user attributes you ca use the 'Variable data fields' field to add these to the user account.</ul></li>") . '</div>';
+      return $output;
+
+    case 'admin/config/services/ssoxs/%':
+      $output = '<div style="padding: 0px 37px 0px 37px;">' . t("Use this form to edit the data for the services registered to make use of SSOXS.
+                          <ul><li>Use the 'basic service information' field to provide the name of your service, it's URL and the IP address
+                          that is allowed to communicate with SSOXS using the XML-RPC protocol. Enter one or more Drupal registered
+                          users as service administrators. Subscription requests and portal status messages will be send to these
+                          persons.</li><li>Use the 'Roles' field to fine tune who is able to subscribe to and use your service based on
+                          the general 'roles' privileges system used throughout Drupal.</li><li>Communication between the SSOXS module
+                          and your service is secured using Blowfish encryption technology. Use the 'XML-RPC API key' field to generate
+                          your service specific API key to enable secure communication.</li><li>Use the 'Signup requirements' field to
+                          specify additional requirements you may impose on new users subscribing to your service. These can be the
+                          possession of a certificate validated on signup, approval by the service administrator, an agreement to
+                          service license terms or the use of a Token based submission system.</li><li>If your service uses any
+                          additional user attributes you ca use the 'Variable data fields' field to add these to the user account.</ul></li>") . '</div>';
+      return $output;
+
+    case 'user/%/services':
+      $output = '<p>' . t('<div class="welcome-text">Welcome to your personal @sitename services subscription page listing
+                           all the services that you can subscribe to. A subscription allows you to use your @sitename login
+                           credentials to authenticate to the service. Subscribing is as simple as clicking on the service name, follow
+                           any subscription signup requirements and clicking the subscribe button.<br/>
+                           Some services require subscription approval, you can follow the approval process on this page.
+                           <hr/></div>', array('@sitename' => $sitename)) . '</p>';
+      return $output;
+  }
+}
+
+/**
+ * Implements hook_perm().
+ *
+ * - Valid permissions for this module.
+ * - Define permissions for administing the module. Fine tune on
+ *   editing module settings and viewing them.
+ * - Define permissions for adding services. Fine tune on add, edit, view
+ *   and delete. Edit means adding and changing, delete is separate and
+ *   view is only view. Set permissions for own service or all services.
+ * - Define permissions for the 'My Services' tab as edit or not. Basically
+ *   means rather or not a user sees the My Services tab.
+ */
+function ssoxs_permission() {
+
+  return array(
+    'administer module' => array(
+      'title' => t('Administer module'),
+      'description' => t('User is allowed to administer the module.'),
+      'restrict access' => TRUE,
+    ),
+    'view admin pages' => array(
+      'title' => t('View admin pages'),
+      'description' => t('User is allowed access to the SSOXS service administration pages. This is a primary permission, finetune using additional permissions.'),
+    ),
+    'edit My Services' => array(
+      'title' => t('Edit My Services'),
+      'description' => t('Display the "My Services" page as part of the users profile pages'),
+    ),
+    'delete any service' => array(
+      'title' => t('Delete any service'),
+      'description' => t('User is allowed to remove any service on the SSOXS administration pages'),
+      'restrict access' => TRUE,
+    ),
+    'delete own service' => array(
+      'title' => t('Delete own service'),
+      'description' => t('User is allowed to remove own service on the SSOXS administration pages'),
+    ),
+    'edit any service' => array(
+      'title' => t('Edit any service'),
+      'description' => t('User is allowed to edit any service on the SSOXS administration pages'),
+      'restrict access' => TRUE,
+    ),
+    'edit own service' => array(
+      'title' => t('Edit own service'),
+      'description' => t('User is allowed to edit own service on the SSOXS administration pages'),
+    ),
+    'view any service' => array(
+      'title' => t('View any service'),
+      'description' => t('User is allowed to view the configuration of any service on the SSOXS administration pages'),
+      'restrict access' => TRUE,
+    ),
+    'view own service' => array(
+      'title' => t('View own service'),
+      'description' => t('User is allowed to view the configuration of own services on the SSOXS administration pages'),
+    ),
+    'add any service' => array(
+      'title' => t('Add any service'),
+      'description' => t('User is allowed register any service with SSOXS'),
+      'restrict access' => TRUE,
+    ),
+    'add own service' => array(
+      'title' => t('Add own service'),
+      'description' => t('User is allowed register own service with SSOXS'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_xmlrpc().
+ *
+ * - To register xmlrpc enabled functions.
+ */
+function ssoxs_xmlrpc() {
+
+  // User authentication function.
+  $methods[] = array(
+    'ssoxs.authenticate',
+    '_ssoxs_authenticate',
+    array('array', 'string', 'string'),
+    t('Returns user array if authentication successful empty array if not.
+       Provide service machine name and Blowfish encrypted string as: "user name","user password as MD5 hash"'),
+  );
+
+  // Automatic login e.a. true single sign on.
+  $methods[] = array(
+    'ssoxs.autologin',
+    '_ssoxs_autologin',
+    array('array', 'string', 'string'),
+    t('Returns user array if authentication succeeded empty array if not.
+       Provide Blowfish encrypted string of certificate dn and user ip'),
+  );
+
+  // Service accounting function.
+  $methods[] = array(
+    'ssoxs.accounting',
+    '_ssoxs_accounting',
+    array('array', 'array'),
+    t('Perform accounting for a new or existing job.
+       accepts an array with; service machine name, user uid and ip, job id, job status, message and job url'),
+  );
+
+  // Query function to search for service users based on key and/or values in
+  // the user object.
+  $methods[] = array(
+    'ssoxs.query',
+    '_ssoxs_query',
+    array('array', 'array'),
+    t('Query the user table for a given service, returns a user object as array.
+       Provide service machine name and key/value pair to query for.'),
+  );
+
+  // Update service specific attributes of the user object.
+  $methods[] = array(
+    'ssoxs.update',
+    '_ssoxs_update',
+    array('array', 'array'),
+    t('Update the service specific attributes of the user object'),
+  );
+
+  return $methods;
+}
+
+/**
+ * Implements hook_theme().
+ *
+ * - Only the service statistics page needs a special theming function
+ */
+function ssoxs_theme() {
+
+  return array(
+    'ssoxs_service_statistics_form' => array(
+      'render element' => 'form',
+      'file' => 'includes/ssoxs_statistics.inc',
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_user_delete().
+ *
+ * - To remove a user from the synchronized ssoxs Drupal user table and
+ *   unsubscribe them from all services.
+ */
+function ssoxs_user_delete($account) {
+
+  ssoxs_db_connect();
+
+  $services = db_select('ssoxs_services', 'n')->fields('n', array('machine_name'))->execute()->fetchCol();
+  foreach ($services as $service) {
+    $service_table = 'ssoxs_' . $service . '_users';
+    db_delete($service_table)->condition('uid', $account->uid, '=')->execute();
+  }
+
+  db_delete('ssoxs_users')->condition('uid', $account->uid, '=')->execute();
+  ssoxs_db_reset();
+
+  drupal_set_message(t('ssoxs: delete account data for user: <i>@name</i> from ssoxs db', array('@name' => $account->name)));
+  watchdog('ssoxs', 'Delete account data for user: %user from ssoxs db', array('%user' => $account->name), WATCHDOG_NOTICE);
+}
+
+/**
+ * Implements hook_user_update().
+ *
+ * - To update the synchronized ssoxs Drupal user table.
+ */
+function ssoxs_user_update(&$edit, $account, $category) {
+
+  ssoxs_db_connect();
+  db_update('ssoxs_users')
+    ->fields(array(
+      'name' => $account->name,
+      'mail' => $account->mail,
+      'pass' => $account->pass,
+    ))
+    ->condition('uid', $account->uid, '=')
+    ->execute();
+  ssoxs_db_reset();
+
+  watchdog('ssoxs', 'Update SSO account data for user: %user in ssoxs db', array('%user' => $account->name),
+            WATCHDOG_NOTICE, l(t('edit'), 'user/' . $account->uid . '/edit'));
+}
+
+/**
+ * Implements hook_user_login().
+ *
+ * - add users current IP to the ssoxs user table as flag that the user is
+ *   logged into the site.
+ */
+function ssoxs_user_login(&$edit, $account) {
+
+  ssoxs_db_connect();
+  db_update('ssoxs_users')
+    ->fields(array('ip' => ip_address()))
+    ->condition('uid', $account->uid, '=')
+    ->execute();
+  ssoxs_db_reset();
+}
+
+/**
+ * Implements hook_user_logout().
+ *
+ * - Removes IP from the ssoxs user table.
+ * - logout: if SAML based authentication and force authentication option
+ *   selected, logout from SAML.
+ * - logout: if SAML based authentication created a local account, remove if
+ *   ssoxs_saml_persist_account is FALSE.
+ */
+function ssoxs_user_logout($account) {
+
+  // Delete account if we are not allowed to persist a user account and it was
+  // created by SAML SSO authenticated user.
+  // Use Drupal authmap table to discover external users authenticated via
+  // ssoxs. Remove from authmaps if needed.
+  $saml_user = user_get_authmaps($account->name);
+  if ($saml_user == 0) {
+    $saml_user = array();
+  }
+
+  if (!variable_get('ssoxs_saml_persist_account', 1) and array_key_exists('ssoxs', $saml_user)) {
+
+    // Check once more if we have a uid, else there is a change we delete the
+    // anonymous user (0)
+    if ($account->uid) {
+      ssoxs_db_connect();
+      db_delete('ssoxs_users')->condition('uid', $account->uid, '=')->execute();
+      ssoxs_db_reset();
+
+      watchdog('ssoxs', 'Delete SAML SSO registered user: %user', array('%user' => $account->name), WATCHDOG_NOTICE);
+      db_delete('authmap')->condition('uid', $account->uid, '=')->execute();
+      user_delete_multiple(array($account->uid));
+    }
+  }
+
+  // Else, set IP to null in ssoxs_users, means no active session.
+  else {
+    ssoxs_db_connect();
+    db_update('ssoxs_users')->fields(array('ip' => NULL))->condition('uid', $account->uid, '=')->execute();
+    ssoxs_db_reset();
+  }
+
+  // If SAML based login does not allow persistent user sessions, logout the
+  // user in simpleSAMLphp.
+  if (variable_get('ssoxs_saml_enabled', 0)) {
+    $saml = new SsoxsSAMLAuth(variable_get('ssoxs_saml_lib_path', ''));
+    if ($saml->classIsInitiated) {
+      $saml->initAuthSource(variable_get('ssoxs_saml_idp', ''));
+      if (variable_get('ssoxs_saml_forceauth', 0) and $saml->samlInstance->isAuthenticated()) {
+        $saml->logout($account);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_user_insert().
+ *
+ * - To insert the new user in the ssoxs user table.
+ */
+function ssoxs_user_insert(&$edit, $account, $category) {
+
+  ssoxs_db_connect();
+  db_insert('ssoxs_users')
+    ->fields(array(
+      'uid' => $account->uid,
+      'name' => $account->name,
+      'pass' => $account->pass,
+      'mail' => $account->mail,
+    ))
+    ->execute();
+  ssoxs_db_reset();
+
+  drupal_set_message(t('ssoxs: new user <i>@name</i> added to ssoxs db', array('@name' => $account->name)));
+  watchdog('ssoxs', 'New user: %user added to ssoxs db', array('%user' => $account->name),
+            WATCHDOG_NOTICE, l(t('edit'), 'user/' . $account->uid . '/edit'));
+}
+
+/**
+ * Implements hook_menu().
+ *
+ * - Add ssoxs admin interface in the module settings and to add the
+ *   "My Services" page to the user account page.
+ * - Access privileges to the various pages regulated by hook_perm, often
+ *   accessed using ssoxs_service_permissions callback function.
+ * - The %service variable in the Drupal path calls the ssoxs_service_load
+ *   function which uses the passed in service pid to fetch the service
+ *   information from the database and returns it wrapped in a service class.
+ * - SSOXS SAML based login page only added to login menu if enabled on the
+ *   SSOXS settings page. Cache might need to be cleared if this option is
+ *   switched off.
+ */
+function ssoxs_menu() {
+
+  $items = array();
+
+  // Lists module in 'Services' group on main configuration page.
+  // Links to the SSOXS service overview page.
+  $items['admin/config/services/ssoxs'] = array(
+    'title' => 'SSOXS',
+    'description' => 'Single Sign On for eXternal Services.',
+    'page callback' => 'ssoxs_overview_page',
+    'file' => 'includes/ssoxs_overview.inc',
+    'access arguments' => array('view admin pages'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  // SSOXS service overview page.
+  $items['admin/config/services/ssoxs/list'] = array(
+    'title' => 'List',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+  );
+
+  // SSOXS register new service page.
+  $items['admin/config/services/ssoxs/add_service'] = array(
+    'title' => 'Add service',
+    'page callback' => 'ssoxs_addservice_page',
+    'access callback' => 'ssoxs_service_permissions',
+    'access arguments' => array(4, 'add'),
+    'file' => 'includes/ssoxs_services.inc',
+    'type' => MENU_LOCAL_TASK,
+    'weight' => 1,
+  );
+
+  // SSOXS module settings page.
+  $items['admin/config/services/ssoxs/settings'] = array(
+    'title' => 'Settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('ssoxs_settingsform'),
+    'access callback' => 'ssoxs_service_permissions',
+    'access arguments' => array(4, 'view'),
+    'file' => 'includes/ssoxs_settings.inc',
+    'type' => MENU_LOCAL_TASK,
+    'weight' => 2,
+  );
+
+  // SSOXS edit service configuration page.
+  $items['admin/config/services/ssoxs/%ssoxs_service'] = array(
+    'page callback' => 'ssoxs_addservice_page',
+    'page arguments' => array(4),
+    'access callback' => 'ssoxs_service_permissions',
+    'access arguments' => array(4, 'view'),
+    'file' => 'includes/ssoxs_services.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  $items['admin/config/services/ssoxs/%ssoxs_service/edit'] = array(
+    'title' => 'Edit',
+    'file' => 'includes/ssoxs_services.inc',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'access callback' => 'ssoxs_service_permissions',
+    'access arguments' => array(4, 'edit'),
+    'weight' => 1,
+  );
+
+  // SSOXS service user administration page.
+  $items['admin/config/services/ssoxs/%ssoxs_service/users'] = array(
+    'title' => 'User management',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('ssoxs_service_users_form', 4),
+    'access callback' => 'ssoxs_service_permissions',
+    'access arguments' => array(4, 'view'),
+    'file' => 'includes/ssoxs_useradmin.inc',
+    'type' => MENU_LOCAL_TASK,
+    'weight' => 2,
+  );
+
+  // SSOXS service job acounting page.
+  $items['admin/config/services/ssoxs/%ssoxs_service/jobs'] = array(
+    'title' => 'Accounting',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('ssoxs_service_job_form', 4),
+    'access callback' => 'ssoxs_service_permissions',
+    'access arguments' => array(4, 'view'),
+    'file' => 'includes/ssoxs_jobadmin.inc',
+    'type' => MENU_LOCAL_TASK,
+    'weight' => 3,
+  );
+
+  // SSOXS service usage statistics page.
+  $items['admin/config/services/ssoxs/%ssoxs_service/statistics'] = array(
+    'title' => 'Service statistics',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('ssoxs_service_statistics_form', 4),
+    'access callback' => 'ssoxs_service_permissions',
+    'access arguments' => array(4, 'view'),
+    'file' => 'includes/ssoxs_statistics.inc',
+    'type' => MENU_LOCAL_TASK,
+    'weight' => 4,
+  );
+
+  // SSOXS service uninstall customization page.
+  $items['admin/config/services/ssoxs/%ssoxs_service/unregister'] = array(
+    'title' => 'Unregister service',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('ssoxs_service_delete_form', 4),
+    'access callback' => 'ssoxs_service_permissions',
+    'access arguments' => array(4, 'delete'),
+    'file' => 'includes/ssoxs_services.inc',
+    'type' => MENU_LOCAL_TASK,
+    'weight' => 5,
+  );
+
+  // SSOXS user profile 'My Services' page.
+  $items['user/%user/services'] = array(
+    'type' => MENU_LOCAL_TASK,
+    'title' => 'My services',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('ssoxs_user_editservices_form', 1),
+    'access arguments' => array('edit My Services'),
+    'file' => 'includes/ssoxs_useraccount.inc',
+  );
+
+  // SSOXS SAML based login.
+  if (variable_get('ssoxs_saml_enabled', 0)) {
+    $items['user/SSO_login'] = array(
+      'page callback' => 'ssoxs_saml_login',
+      'access callback' => 'user_is_anonymous',
+      'type' => MENU_LOCAL_TASK,
+      'title' => 'Login with your ' . variable_get('ssoxs_saml_idp', '') . ' credentials',
+      'file' => 'includes/ssoxs_saml_login.inc',
+      'weight' => 2,
+    );
+  }
+
+  // SSOXS (ajax) callback functions for adding variable data fields.
+  $items['ssoxs/add_vdata'] = array(
+    'title' => 'Add variable field data to service',
+    'page callback' => '_ssoxs_vdata_add_callback',
+    'access callback' => 'ssoxs_service_permissions',
+    'file' => 'includes/ssoxs_services.inc',
+    'access arguments' => array(3, 'edit'),
+    'type' => MENU_CALLBACK,
+  );
+
+  // SSOXS (ajax) callback functions for autocompleting admin names.
+  $items['admin/config/ssoxs/autocomplete_admins'] = array(
+    'title' => 'Service administrator autocomplete',
+    'page callback' => '_ssoxs_autocomplete_admins_callback',
+    'access callback' => 'ssoxs_service_permissions',
+    'access arguments' => array(3, 'add'),
+    'file' => 'includes/ssoxs_services.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  // SSOXS (ajax) callback functions for checking IP's.
+  $items['admin/config/ssoxs/set_ip_by_url_callback'] = array(
+    'title' => 'Set service ip field based on service URL',
+    'page callback' => '_ssoxs_iptourl_callback',
+    'access callback' => 'ssoxs_service_permissions',
+    'access arguments' => array(3, 'add'),
+    'file' => 'includes/ssoxs_services.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  // SSOXS (ajax) callback functions for generating API key.
+  $items['admin/config/ssoxs/generate_api_key'] = array(
+    'title' => 'Generate an API key',
+    'page callback' => '_ssoxs_generate_key_callback',
+    'access callback' => 'ssoxs_service_permissions',
+    'access arguments' => array(3, 'add'),
+    'file' => 'includes/ssoxs_services.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  // SSOXS (ajax) callback functions for validating simpleSAMLphp path.
+  $items['admin/config/ssoxs/set_saml_lib_path_callback'] = array(
+    'title' => 'Validate SimpleSAMLphp library path',
+    'page callback' => '_ssoxs_validate_samllibpath_callback',
+    'access callback' => 'ssoxs_service_permissions',
+    'access arguments' => array(3, 'edit'),
+    'file' => 'includes/ssoxs_settings.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_cron().
+ *
+ * - Run at daily intervals.
+ * - Check if there are users that are pending for more than 3 days.
+ *   Send reminder email to administrators every tome cron runs (every day).
+ * - If the module uses an external database or if the "backup and migrate"
+ *   module is not active, run backup the ssoxs SQL database to a .sql file in
+ *   the ~/files/ssoxs directory using _ssoxs_backupSsoxsDatabase function.
+ * - soxs_saml_remove_inactive True: remove external user account if more than 6
+ *   month of inactivity. Send email 1 month in advance.
+ */
+function ssoxs_cron() {
+
+  global $base_url;
+  // Set daily interval and store as variable.
+  $interval = variable_get('ssoxs_cron_interval', 86400);
+
+  // Check if it is time to run.
+  if (time() >= variable_get('ssoxs_cron_next_execution', 0)) {
+
+    // Task 1: Check if there are users pending for a while. send email to
+    // admin again.
+    ssoxs_db_connect();
+    $services = db_select('ssoxs_services')->fields('ssoxs_services', array('machine_name'))->execute()->fetchCol();
+    ssoxs_db_reset();
+    foreach ($services as $service) {
+
+      // Get number of users pending for the service more than 3 days
+      ssoxs_db_connect();
+      $pending_users = db_select('ssoxs_' . $service . '_users', 'n')
+        ->fields('n', array('uid'))
+        ->condition('n.subscription', 1, '=')
+        ->condition('n.rdate', REQUEST_TIME + 259200, '>')
+        ->countQuery()->execute()->fetchField();
+      ssoxs_db_reset();
+
+      // If pending users, send reminder mail to service admins.
+      if ($pending_users > 0) {
+        $service = new SsoxsService();
+        $service->getServiceByMachineName($service);
+
+        $admin_mail = array();
+        foreach ($service->admins as $admin) {
+          $admin_mail[] = $admin->mail;
+        }
+
+        $serviceurl = l(t($service->name),  $base_url . '/admin/config/services/ssoxs/' . $service->pid .  '/users');
+        $subject = t('User subscription approval reminder for @name', array('@name' => $service->name));
+        $message = t('Dear @name service administrator,<br/><br/>
+                      There are still @pending awaiting approval for service subscription.<br/>
+                      Please process there request at: @url <br/>',
+                      array('@name' => $service->name, '@pending' => $pending_users, '@url' => $serviceurl));
+        _ssoxs_send_email($admin_mail, $subject, $message);
+
+        watchdog('ssoxs', 'User subscription approval reminder send to administrators of %service service', array('%service' => $service->name));
+      }
+    }
+
+    // Task 2: Run ssoxs database tables backup function if 'backup and
+    // migrate' module is not active or data is not stored in default (local)
+    // database.
+    if (!module_exists('backup_migrate') or variable_get('ssoxs_external_db_name', 'default') != 'default') {
+      _ssoxs_backupSsoxsDatabase();
+    }
+
+    // Task 3: Remove external user account if more than 6 month of inactivity.
+    // Send email 1 month in advance.
+    if (variable_get('ssoxs_saml_remove_inactive', FALSE)) {
+      _ssoxs_checkExternalUsersActivity();
+    }
+
+    watchdog('ssoxs', 'Run SSOXS cron tasks');
+  }
+
+  // Store new execution timepoint.
+  variable_set('ssoxs_cron_next_execution', time() + $interval);
+}
+
+/*-----------------------------------------------------------------
+ * Menu callbacks
+ *------------------------------------------------------------------*/
+
+/**
+ * Control access to service pages for perms 'edit', 'view' and 'delete'.
+ *
+ * - Differentiate between access to any service or own service.
+ * - If '<category> any service' privilege, grant. If '<category>own service'
+ *   and user uid equals service admin uid, grant.
+ * - Own service is matched against the array of service administrator uid's.
+ *
+ * @param class $service
+ *   Service class to match service administrator uids against current user uid.
+ * @param string $access
+ *   Privilege catagorie as 'edit', 'view' and 'delete'.
+ *
+ * @return bool
+ *   Access granted TRUE or not FALSE.
+ */
+function ssoxs_service_permissions($service, $access) {
+
+  $granted = FALSE;
+  $granted = user_access("$access any service");
+  if (!$granted and user_access("$access own service")) {
+    global $user;
+    $granted = (in_array($user->uid, explode(',', $service->uid)));
+  }
+  return $granted;
+}
+
+/**
+ * Pickes up the services pid from the URL and returns the service instance.
+ *
+ * @param int $pid
+ *   Service numeric identifier (pid) extracted from URL.
+ *
+ * @return class
+ *   Service object matching the pid.
+ */
+function ssoxs_service_load($pid) {
+  
+  $service = new SsoxsService();
+  $service->getServiceByPid($pid);
+
+  return $service;
+}
+
+/*-----------------------------------------------------------------
+ * Private methods
+ *------------------------------------------------------------------*/
+
+/**
+ * Class to manage the variable data field of type 'text'
+ */
+class SsoxsAhahTextType {
+  protected $type = "SsoxsAhahTextType";
+  public $form;
+  public $delete = 0;
+
+  /**
+   * Class constructor.
+   *
+   * @param array $values
+   *   Optional array of values to pre-populate the text type with database
+   *   stored values.
+   */
+  public function __construct($values = NULL) {
+
+    $this->form = $this->returnForm();
+    if (!is_null($values)) {
+      $this->fillForm($values);
+    }
+  }
+
+  /**
+   * Create the form elements for configuration of the text type.
+   *
+   * @return array
+   *   Array of Drupal form elements.
+   */
+  public function returnForm() {
+
+    $form = array();
+
+    $form['type'] = array(
+      '#type' => 'hidden',
+      '#value' => $this->type,
+    );
+
+    $form['var_name'] = array(
+      '#prefix' => '<div class="vdata-wrapper"><h3>Text field</h3>',
+      '#type' => 'textfield',
+      '#title' => t('Variable name'),
+      '#description' => t('Specify unique variable name, will be used as ID in the database'),
+      '#required' => TRUE,
+    );
+
+    $form['delete'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Remove variable'),
+      '#default_value' => 0,
+      '#prefix' => '<div class="delete-box">',
+      '#suffix' => '</div>',
+    );
+
+    $form['description'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Description'),
+      '#description' => t('Description of the data fields purpose'),
+    );
+
+    $form['default_value'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Default value'),
+      '#description' => t('Optional default value'),
+      '#suffix' => '</div>',
+    );
+
+    return $form;
+  }
+
+  /**
+   * Return public form items belonging to variable type.
+   *
+   * - returns array with Drupal form item of type textbox.
+   * - return empty array if no form element.
+   */
+  public function returnPublicForm() {
+
+    $form = array();
+    $form[$this->form['var_name']['#default_value']] = array(
+      '#type' => 'textfield',
+      '#title' => t('@var (var id: @id)', array(
+        '@var' => $this->form['description']['#default_value'],
+        '@id' => $this->form['var_name']['#default_value'],
+      )),
+    );
+
+    return $form;
+  }
+
+  /**
+   * Update the default form fields for this type.
+   *
+   * - If the var_name is set it can no longer be changed.
+   * - Disable it and change required to FALSE.
+   * - Set the delete flag. If checked than this variable is no longer stored.
+   */
+  public function fillForm($values) {
+
+    foreach ($values as $i => $v) {
+      if (array_key_exists($i, $this->form)) {
+
+        if ($i == 'var_name') {
+          if (array_key_exists('#default_value', $this->form[$i])) {
+            $this->form[$i]['#disabled'] = TRUE;
+            $this->form[$i]['#required'] = FALSE;
+          }
+          else {
+            $this->form[$i]['#default_value'] = _ssoxs_machine_name($v);
+          }
+        }
+        else {
+          if (empty($v)) {
+            $returnform = $this->returnForm();
+            $this->form[$i] = $returnform[$i];
+          }
+          else {
+            $this->form[$i]['#default_value'] = $v;
+          }
+        }
+      }
+    }
+
+    $this->delete = $this->form['delete']['#default_value'] or 0;
+  }
+
+  /**
+   * Return an array of values used to store the variable in the db.
+   */
+  public function returnStorageArray() {
+
+    $storage_array = array('type' => $this->type);
+    foreach ($this->form as $i => $v) {
+      if (array_key_exists('#default_value', $v)) {
+        $storage_array[$i] = $v['#default_value'];
+      }
+    }
+
+    return $storage_array;
+  }
+
+  /**
+   * Add the new variable as column to the table using Drupals db_add_field.
+   *
+   * - Required table name as argument.
+   * - The var_name needs to be set, otherwise no table column key.
+   * - Make sure the db is set to 'ssoxs', we will not do it in this function
+   *   as it might break the db calls in the code where this functioned is
+   *   called.
+   */
+  public function addColumnToTable($table) {
+
+    if (array_key_exists('#default_value', $this->form['var_name'])) {
+
+      $default = NULL;
+      if (array_key_exists('#default_value', $this->form['default_value'])) {
+        $default = $this->form['default_value']['#default_value'];
+      }
+
+      $schema_array = array(
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => (!is_null($default)) ? TRUE : FALSE,
+        'description' => $this->form['description']['#default_value'],
+      );
+
+      if (!is_null($default)) {
+        $schema_array['default'] = $default;
+      }
+
+      db_add_field($table, $this->form['var_name']['#default_value'], $schema_array);
+    }
+  }
+}
+
+
+class SsoxsAhahIntegerType {
+
+  /**
+   * Class to manage the variable data field of type 'integer'.
+   */
+
+  protected $type = "SsoxsAhahIntegerType";
+  public $form;
+  public $delete = 0;
+
+  /**
+   * Class constructor.
+   *
+   * @param array $values
+   *   Optional array of values to pre-populate the integer type with database
+   *   stored values.
+   */
+  public function __construct($values = NULL) {
+
+    $this->form = $this->returnForm();
+    if (!is_null($values)) {
+      $this->fillForm($values);
+    }
+  }
+
+  /**
+   * Create the form elements for configuration of the integer type.
+   *
+   * @return array
+   *   Array of Drupal form elements.
+   */
+  public function returnForm() {
+
+    $form = array();
+
+    $form['type'] = array(
+      '#type' => 'hidden',
+      '#value' => $this->type,
+    );
+
+    $form['var_name'] = array(
+      '#prefix' => '<div class="vdata-wrapper"><h3>Integer field</h3>',
+      '#type' => 'textfield',
+      '#title' => t('Variable name'),
+      '#description' => t('Specify unique variable name, will be used as ID in the database'),
+      '#required' => TRUE,
+    );
+
+    $form['delete'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Remove variable'),
+      '#default_value' => 0,
+      '#prefix' => '<div class="delete-box">',
+      '#suffix' => '</div>',
+    );
+
+    $form['description'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Description'),
+      '#description' => t('Description of the data fields purpose'),
+    );
+
+    $form['default_value'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Default value'),
+      '#description' => t('Optional default value'),
+    );
+
+    $form['neg_allowed'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Allow negative values'),
+      '#default_value' => 0,
+      '#suffix' => '</div>',
+    );
+
+    return $form;
+  }
+
+  /**
+   * Return public form items belonging to variable type.
+   *
+   * - returns array with Drupal form item of type textbox.
+   * - return empty array if no form element.
+   */
+  public function returnPublicForm() {
+
+    $form = array();
+    $form[$this->form['var_name']['#default_value']] = array(
+      '#type' => 'textfield',
+      '#title' => t('@var (var id: @id)', array(
+        '@var' => $this->form['description']['#default_value'],
+        '@id' => $this->form['var_name']['#default_value'],
+      )),
+    );
+
+    return $form;
+  }
+
+  /**
+   * Update the default form fields for this type.
+   *
+   * - If the var_name is set it can no longer be changed.
+   * - Disable it and change required to FALSE.
+   * - Set the delete flag. If checked than this variable is no longer stored.
+   */
+  public function fillForm($values) {
+
+    if (!array_key_exists('neg_allowed', $values)) {
+      $this->form['neg_allowed']['#default_value'] = 0;
+    }
+
+    foreach ($values as $i => $v) {
+      if (array_key_exists($i, $this->form)) {
+
+        if ($i == 'var_name') {
+          if (array_key_exists('#default_value', $this->form[$i])) {
+            $this->form[$i]['#disabled'] = TRUE;
+            $this->form[$i]['#required'] = FALSE;
+          }
+          else {
+            $this->form[$i]['#default_value'] = _ssoxs_machine_name($v);
+          }
+        }
+        elseif ($i == 'default_value') {
+          if ($this->form['neg_allowed']['#default_value'] == 0) {
+            $v = abs($v);
+          }
+          $this->form[$i]['#default_value'] = $v;
+        }
+        else {
+          if (empty($v)) {
+            $returnform = $this->returnForm();
+            $this->form[$i] = $returnform[$i];
+          }
+          else {
+            $this->form[$i]['#default_value'] = $v;
+          }
+        }
+      }
+    }
+
+    $this->delete = $this->form['delete']['#default_value'] or 0;
+  }
+
+  /**
+   * Return an array of values used to store the variable in the db.
+   */
+  public function returnStorageArray() {
+
+    $storage_array = array('type' => $this->type);
+     foreach ($this->form as $i => $v) {
+      if (array_key_exists('#default_value', $v)) {
+        $storage_array[$i] = $v['#default_value'];
+      }
+    }
+    return $storage_array;
+  }
+
+  /**
+   * Add the new variable as column to the table using Drupals db_add_field.
+   *
+   * - Required table name as argument.
+   * - The var_name needs to be set, otherwise no table column key.
+   * - Make sure the db is set to 'ssoxs', we will not do it in this function
+   *   as it might break the db calls in the code where this functioned is
+   *   called.
+   */
+  public function addColumnToTable($table) {
+
+    if (array_key_exists('#default_value', $this->form['var_name'])) {
+
+      $default = NULL;
+      if (array_key_exists('#default_value', $this->form['default_value']) and !empty($this->form['default_value']['#default_value'])) {
+        $default = $this->form['default_value']['#default_value'];
+      }
+
+      $schema_array = array(
+        'type' => 'int',
+        'size' => 'big',
+        'not null' => (is_null($default)) ? FALSE : TRUE,
+        'unsigned' => FALSE,
+        'description' => $this->form['description']['#default_value'],
+      );
+
+      if ($this->form['neg_allowed']['#default_value'] == 0) {
+        $schema_array['unsigned'] = TRUE;
+      }
+      if (!is_null($default)) {
+        $schema_array['default'] = $default;
+      }
+
+      db_add_field($table, $this->form['var_name']['#default_value'], $schema_array);
+    }
+  }
+}
+
+class SsoxsAhahOptionType
+{
+
+  /**
+   * Class to manage the variable data field of type 'option'
+   */
+
+  protected $type = "SsoxsAhahOptionType";
+  public $form;
+  public $delete = 0;
+
+  /**
+   * Class constructor.
+   *
+   * @param array $values
+   *   Optional array of values to pre-populate the option type with database
+   *   stored values.
+   */
+  public function __construct($values = NULL) {
+
+    $this->form = $this->returnForm();
+    if (!is_null($values)) {
+      $this->fillForm($values);
+    }
+  }
+
+  /**
+   * Create the form elements for configuration of the option type.
+   *
+   * @return array
+   *   Array of Drupal form elements.
+   */
+  public function returnForm() {
+
+    $form = array();
+
+    $form['type'] = array(
+      '#type' => 'hidden',
+      '#value' => $this->type,
+    );
+
+    $form['var_name'] = array(
+      '#prefix' => '<div class="vdata-wrapper"><h3>Dropdown list</h3>',
+      '#type' => 'textfield',
+      '#title' => t('Variable name'),
+      '#description' => t('Specify unique variable name, will be used as ID in the database'),
+      '#required' => TRUE,
+    );
+
+    $form['delete'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Remove variable'),
+      '#default_value' => 0,
+      '#prefix' => '<div class="delete-box">',
+      '#suffix' => '</div>',
+    );
+
+    $form['description'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Description'),
+      '#description' => t('Description of the data fields purpose'),
+    );
+
+    $form['options'] = array(
+      '#type' => 'textarea',
+      '#title' => t('Option list'),
+      '#description' => t('Define option for the dropdown menu as "machine readable option name | human readable option name" e.a var1|Variable 1'),
+      '#wysiwyg' => FALSE,
+      '#resizable' => TRUE,
+    );
+
+    $form['default_value'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Optional default value'),
+      '#description' => t('Define the machine readable name for the value used as default.'),
+      '#suffix' => '</div>',
+    );
+
+    return $form;
+  }
+
+  /**
+   * Return public form items belonging to variable type.
+   *
+   * - returns array with Drupal form item of type select.
+   * - return empty array if no form element.
+   */
+  public function returnPublicForm() {
+
+    $form = array();
+    if (array_key_exists('#default_value', $this->form['options'])) {
+
+      $optarray = array();
+      foreach (explode("\n", $this->form['options']['#default_value']) as $opt) {
+        $splitted = explode("|", $opt);
+        if (count($splitted) == 2) {
+          $optarray[$splitted[0]] = $splitted[1];
+        }
+      }
+
+      $default = NULL;
+      if (array_key_exists('#default_value', $this->form['default_value'])) {
+        $default = $this->form['default_value']['#default_value'];
+      }
+
+      $form[$this->form['var_name']['#default_value']] = array(
+        '#type' => 'select',
+        '#default_value' => $default,
+        '#options' => $optarray,
+        '#title' => t('@var (var id: @id)', array(
+          '@var' => $this->form['description']['#default_value'],
+          '@id' => $this->form['var_name']['#default_value'],
+        )),
+      );
+    }
+
+    return $form;
+  }
+
+  /**
+   * Update the default form fields for this type.
+   *
+   * - If the var_name is set it can no longer be changed.
+   * - Disable it and change required to FALSE.
+   * - Set the delete flag. If checked than this variable is no longer stored.
+   */
+  public function fillForm($values) {
+
+    foreach ($values as $i => $v) {
+      if (array_key_exists($i, $this->form)) {
+
+        if ($i == 'var_name') {
+          if (array_key_exists('#default_value', $this->form[$i])) {
+            $this->form[$i]['#disabled'] = TRUE;
+            $this->form[$i]['#required'] = FALSE;
+          }
+          else {
+            $this->form[$i]['#default_value'] = _ssoxs_machine_name($v);
+          }
+        }
+        else {
+          if (empty($v)) {
+            $returnform = $this->returnForm();
+            $this->form[$i] = $returnform[$i];
+          }
+          else {
+            $this->form[$i]['#default_value'] = $v;
+          }
+        }
+      }
+    }
+
+    $this->delete = $this->form['delete']['#default_value'] or 0;
+  }
+
+  /**
+   * Return an array of values used to store the variable in the db.
+   */
+  public function returnStorageArray() {
+
+    $storage_array = array('type' => $this->type);
+     foreach ($this->form as $i => $v) {
+      if (array_key_exists('#default_value', $v)) {
+        $storage_array[$i] = $v['#default_value'];
+      }
+    }
+
+    return $storage_array;
+  }
+
+  /**
+   * Add the new variable as column to the table using Drupals db_add_field.
+   *
+   * - Required table name as argument.
+   * - The var_name needs to be set, otherwise no table column key.
+   * - Make sure the db is set to 'ssoxs', we will not do it in this function
+   *   as it might break the db calls in the code where this functioned is called.
+   */
+  public function addColumnToTable($table) {
+
+    if (array_key_exists('#default_value', $this->form['var_name'])) {
+
+      $default = NULL;
+      if (array_key_exists('#default_value', $this->form['default_value'])) {
+        $default = $this->form['default_value']['#default_value'];
+      }
+
+      $schema_array = array(
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => (!empty($default)) ? TRUE : FALSE,
+        'description' => $this->form['description']['#default_value'],
+      );
+
+      if (!is_null($default)) {
+        $schema_array['default'] = $default;
+      }
+
+      db_add_field($table, $this->form['var_name']['#default_value'], $schema_array);
+    }
+  }
+}
+
+/*------------------------------------------------------------------
+ * XML-RPC methods
+ *
+ * Defines the SSOXS XML-RPC based API for services to implement and
+ * perform authentication and authorisation tasks, accounting and
+ * user query tasks.
+ *------------------------------------------------------------------*/
+
+/**
+ * Private function: check if the remote IP is allowed access to XML-RPC
+ * enabled functions for the given service. Localhost calls are allowed.
+ *
+ * @param string $ip
+ *   Remote IP to check.
+ * @param string $machine_name
+ *   Service machine name to check access for.
+ *
+ * @return bool
+ *   Access or not.
+ */
+function _ssoxs_xmlrpc_checkip($ip, $machine_name) {
+
+  // Fetch the service URL from the db.
+  ssoxs_db_connect();
+  $url = db_select('ssoxs_services', 's')
+    ->fields('s', array('url'))
+    ->condition('s.machine_name', $machine_name, '=')
+    ->execute()
+    ->fetchField();
+  ssoxs_db_reset();
+
+  // We allow calls from localhost (IPv6: '::1', IPv4: '127.0.0.1').
+  if (in_array($ip, array('::1', '127.0.0.1'))) {
+    return TRUE;
+  }
+
+  $allowed = FALSE;
+  if ($url) {
+    $parsed_url = parse_url($url);
+    $translated_ip = gethostbyname($parsed_url['host']);
+    if ($translated_ip == $ip) {
+      $allowed = TRUE;
+    }
+  }
+
+  return $allowed;
+}
+
+/**
+ * XML-RPC enabled function for user authentication to a given service.
+ *
+ * - Function checks if the remote service is allowed to use the API.
+ * - Function checks if the user with a given name is subscribed to the service
+ *   and if the password is valid. If neither of these return an empty array,
+ *   otherwise return subscription information.
+ * - User object contains only the user information requested by the service
+ * - Return array is Blowfish encrypted if "encrypt all" option is set in the
+ *   service administration.
+ *
+ * @param string $machine_name
+ *   Service machine name to perform authentication for.
+ * @param string $cryptstring
+ *   Blowfisch encrypted user name/pasword.
+ *
+ * @return array
+ *   User object as array if authentication was successful, empty array if not.
+ */
+function _ssoxs_authenticate($machine_name, $cryptstring) {
+
+  // Check if XMLRPC request came from an allowed IP. e.a the IP used to
+  // register the service.
+  if (_ssoxs_xmlrpc_checkip(ip_address(), $machine_name)) {
+
+    // Get the service object.
+    $service = new SsoxsService();
+    $service->getServiceByMachineName($machine_name);
+
+    // Decrypt the Blowfish encrypted string to retrieve name and pass.
+    $crypt = new SsoxsBlowfish($service->api_key);
+    $decrypted = $crypt->decrypt($cryptstring);
+    $decrypted_array = explode(',', $decrypted);
+
+    if (!empty($decrypted_array) and count($decrypted_array) == 2) {
+      $name = $decrypted_array[0];
+      $pass = $decrypted_array[1];
+    }
+    else {
+      return array();
+    }
+
+    // Load ssoxs user by name, check if subscribed to service and valid
+    // password.
+    // subscribed may be with status 1 (pending), 2 (active) or 3 (trial).
+    // Password validation done by Drupal's user_check_password from
+    // includes/password.inc
+    include 'includes/password.inc';
+    $ssoxsuser = new SsoxsUser(NULL, $name, $machine_name);
+    if ($ssoxsuser->isSubscribed() != 0 and user_check_password(trim($pass), $ssoxsuser)) {
+
+      // Prepare data array to return.
+      $return_array = $ssoxsuser->getUserArray();
+
+      // If service does not use Token based access, remove token balans from
+      // array.
+      if ($service->access_tokens == 0) {
+        unset($return_array['tokens']);
+      }
+
+      // Array values are encrypted using Blowfish before returning if the
+      // ssoxs_encryptall variable is true.
+      if ($service->encrypt_all) {
+        foreach ($return_array as $i => $k) {
+          $return_array[$i] = $crypt->encrypt($k);
+        }
+      }
+
+      return $return_array;
+    }
+    else {
+      return array();
+    }
+  }
+  else {
+    return xmlrpc_error(1001, t('@ip: this address is not allowed to access this RPC service', array('@ip' => ip_address())));
+  }
+}
+
+/**
+ * XML-RPC enables function for automatic authentication and authorization for
+ * a service.
+ *
+ * Works by:
+ * - Adding a BlowFish encrypted serialized PHP array containing the machine
+ *   name of the service for which access is requested, the user UID and a
+ *   time stamp.
+ * - The service extracts the string from the URL and sends it back to the site
+ *   using this autologin XML-RPC function
+ * - The string can only be decoded successfully if the remote service is
+ *   allowed to use the API and if the string is decrypted using the same
+ *   service specific api key used to encrypt.
+ * - The autologin key is valid for 15 minutes only.
+ * - Function checks if the user with a given name is subscribed to the service
+ *   and if the password is valid. If neither of these return an empty array,
+ *   otherwise return subscription information.
+ * - User object contains only the user information requested by the service.
+ * - Return array is Blowfish encrypted if "encrypt all" option is set in the
+ *   service administration.
+ *
+ * @param string $machine_name
+ *   Service machine name to perform authentication for.
+ * @param string $autologin_key
+ *   Blowfish encrypted serialized array containing service,
+ *   user and time information.
+ *
+ * @return array
+ *   User object as array if authentication was successful, empty array if not.
+ */
+function _ssoxs_autologin($machine_name, $autologin_key) {
+
+  // Check if XMLRPC request came from an allowed IP. e.a the URL used to
+  // register the service.
+  if (_ssoxs_xmlrpc_checkip(ip_address(), $machine_name)) {
+
+    // Get the service object.
+    $service = new SsoxsService();
+    $service->getServiceByMachineName($machine_name);
+
+    // Decrypt the Blowfish encrypted string
+    $crypt = new SsoxsBlowfish($service->api_key);
+    $autologin_array = unserialize($crypt->decrypt($autologin_key));
+
+    // Check validity of the autologin key.
+    $valid = FALSE;
+    if (!empty($autologin_array)) {
+      $required_keys = array('mn','uid','time');
+      if (count(array_intersect_key(array_flip($required_keys), $autologin_array)) === count($required_keys)) {
+        if ($autologin_array['mn'] == $machine_name and REQUEST_TIME < ($autologin_array['time'] + 900)) {
+          $valid = TRUE;
+        }
+      }
+    }
+
+    if ($valid) {
+      $ssoxsuser = new SsoxsUser($autologin_array['uid'], NULL, $machine_name);
+      if ($ssoxsuser->isSubscribed() != 0) {
+
+        // Prepare data array to return.
+        $return_array = $ssoxsuser->getUserArray();
+
+        // If service does not use Token based access, remove token balans from
+        // array.
+        if ($service->access_tokens == 0) {
+          unset($return_array['tokens']);
+        }
+
+        // Array values are encrypted using Blowfish before returning if the
+        // ssoxs_encryptall variable is true.
+        if ($service->encrypt_all) {
+          foreach ($return_array as $i => $k) {
+            $return_array[$i] = $crypt->encrypt($k);
+          }
+        }
+
+        return $return_array;
+      }
+
+      return array();
+    }
+    return xmlrpc_error(1001, t('Invalid autologin request or session expired'));
+
+  }
+  else {
+    return xmlrpc_error(1001, t('@ip: this address is not allowed to access this RPC service', array('@ip' => ip_address())));
+  }
+}
+
+/**
+ * XML-RPC enabled function to communicate accounting information about a job.
+ *
+ * - An array with job information stored at that time will always be returned.
+ * - Return array is Blowfish encrypted if "encrypt all" option is set in the
+ *   service administration.
+ *
+ * @param array $jobarray
+ *   Update the service accounting database with key/value pairs in this array
+ *   or register a new job.
+ *
+ * @return array
+ *   Return updated or new job array.
+ */
+function _ssoxs_accounting($jobarray) {
+
+  // Convert array to object.
+  $jobarray = (object) $jobarray;
+
+  // Check if XMLRPC request came from an allowed IP. e.a the URL used to
+  // register the service.
+  if (!_ssoxs_xmlrpc_checkip(ip_address(), $jobarray->machine_name)) {
+    return xmlrpc_error(1001, t('@ip: this address is not allowed to access this RPC service', array('@ip' => ip_address())));
+  }
+
+  // Get the service object.
+  $service = new SsoxsService();
+  $service->getServiceByMachineName($jobarray->machine_name);
+
+  // Get the user object using the SsoxsUser class. If uid 0 than init class as
+  // anonymous user.
+  $user = new SsoxsUser($jobarray->uid, NULL, $jobarray->machine_name);
+
+  // Check if the given uid is valid e.a. either 0 or a uid subscribed to the
+  // service. If not, stop and return error message.
+  if (!$user->doesExist()) {
+    return xmlrpc_error(1002, t('No user with UID: @uid', array('@uid' => $jobarray->uid)));
+  }
+  else {
+
+    ssoxs_db_connect();
+    $return_job_array = array();
+    $service_stats = 'ssoxs_' . $jobarray->machine_name . '_stats';
+
+    // Process jid, if no job id is given generate a random 10 digit number to
+    // create the new job.
+    // If jid, search for the job in the db. If not found create a new one,
+    // else fetch the data.
+    if (empty($jobarray->jid)) {
+      $alljids = db_select($service_stats, 's')->fields('s', array('jid'))->execute()->fetchAssoc();
+      $jid = mt_rand(1000000000, 1999999999);
+      while (in_array($jid, $alljids)) {
+        $jid = mt_rand(1000000000, 1999999999);
+      }
+      $job = array();
+    }
+    else {
+      $jid = $jobarray->jid;
+      $job = db_select($service_stats, 'n')->fields('n')->condition('n.jid', $jid, '=')->execute()->fetchAssoc();
+    }
+
+    // Set finish date if the job status equals 5, 6 or 7. If the service uses
+    // token based access, subtract 1 from the token users token balans.
+    // If the user balans drops below 5 start sending emails notifing the user
+    // of low token balans using the token message from the service
+    // configuration.
+    $fdate = NULL;
+    if (in_array($jobarray->status, array(5, 6, 7))) {
+      $fdate = REQUEST_TIME;
+
+      if ($service->access_tokens and $user->uid != 0) {
+        $new_balance = $user->tokens - 1;
+        if ($new_balance <= 5) {
+          db_update('ssoxs_' . $jobarray->machine_name . '_user')
+            ->fields(array('tokens' => $new_balance))
+            ->condition('uid', $user->uid, '=')
+            ->execute();
+          $subject = sprintf("Your token balans for service %s is running low (%s)", $service->name, $new_balance);
+          _ssoxs_send_email($user->mail, $subject, $service->token_message);
+        }
+        if ($new_balance == 0) {
+          $subject = sprintf("Your token balans for service %s is depleted", $service->name);
+          _ssoxs_send_email($user->mail, $subject, $service->token_message);
+        }
+      }
+    }
+
+    // Always add messages to existing messages adding a time stamp.
+    if (!empty($jobarray->message)) {
+      $log = '';
+      if ($job) {
+        $log = $job['message'];
+      }
+      $log .= sprintf("<br/><strong>%s<strong><br/><p>%s</p>", format_date(REQUEST_TIME, 'medium'), $jobarray->message);
+      $jobarray->message = $log;
+    }
+
+    // If the job exists, check all parameters and construct SQL query.
+    if ($job) {
+
+      $update_array = array();
+      if (!empty($fdate)) {
+        $update_array['fdate'] = $fdate;
+      }
+      if (!empty($jobarray->status)) {
+        $update_array['status'] = $jobarray->status;
+      }
+      if (!empty($jobarray->message)) {
+        $update_array['message'] = $jobarray->message;
+      }
+      if (!empty($jobarray->url)) {
+        $update_array['url'] = $jobarray->url;
+      }
+
+      db_update($service_stats)->fields($update_array)->condition('jid', $jid, '=')->execute();
+    }
+
+    // If it is a new job.
+    else {
+
+      db_insert($service_stats)
+        ->fields(array(
+          'uid' => $user->uid,
+          'sdate' => REQUEST_TIME,
+          'fdate' => $fdate,
+          'ip' => $jobarray->ip,
+          'country' => _ssoxs_ip_to_country_code($jobarray->ip),
+          'status' => $jobarray->status,
+          'jid' => $jid,
+          'message' => $jobarray->message,
+          'url' => $jobarray->url))
+        ->execute();
+    }
+
+    // Return array representing new accounted job.
+    $return_job_array = db_select($service_stats, 'n')->fields('n')->condition('jid', $jid, '=')->execute()->fetchAssoc();
+    ssoxs_db_reset();
+
+    // Array values are encrypted using Blowfish before returning if the
+    // ssoxs_encryptall variable is true.
+    if ($service->encrypt_all) {
+      $crypt = new SsoxsBlowfish($service->api_key);
+      foreach ($return_job_array as $i => $k) {
+        $return_job_array[$i] = $crypt->encrypt($k);
+      }
+    }
+
+    return $return_job_array;
+  }
+}
+
+/**
+ * XML-RPC enabled function to query the user table of a given service for data
+ * defined by column or by column/row pair.
+ *
+ * - User object contains only the user information requested by the service
+ * - Return array is Blowfish encrypted if "encrypt all" option is set in the
+ *   service administration.
+ * - User objects matching the query are returned.
+ *
+ * @param array $queryobject
+ *   Array with key/value pair to search the user database for.
+ *   If only a key is defined, all the data for the corresponding database
+ *   table column will be returned.
+ *
+ * @return array
+ *   User object matching query if found, else empty array.
+ */
+function _ssoxs_query($queryobject) {
+
+  // Convert array to object.
+  $queryobject = (object) $queryobject;
+
+  // Check if XMLRPC request came from an allowed IP. e.a the URL used to
+  // register the service.
+  if (!_ssoxs_xmlrpc_checkip(ip_address(), $queryobject->machine_name)) {
+    return xmlrpc_error(1001, t('@ip: this address is not allowed to access this RPC service', array('@ip' => ip_address())));
+  }
+
+  // Get the service object.
+  $service = new SsoxsService();
+  $service->getServiceByMachineName($queryobject->machine_name);
+  if ($service->encrypt_all) {
+    $crypt = new SsoxsBlowfish($service->api_key);
+  }
+
+  ssoxs_db_connect();
+  $service_users = 'ssoxs_' . $queryobject->machine_name . '_users';
+
+  if (db_field_exists($service_users, $queryobject->key) or db_field_exists('ssoxs_users', $queryobject->key)) {
+
+    // If no value, use key to return all data for the column with the
+    // corresponding key name.
+    $uids = array();
+    if (!$queryobject->value) {
+      $query = db_select('ssoxs_users', 'u');
+      $query->join($service_users, 'n', 'u.uid = n.uid');
+      $uids = $query->fields('n', array('uid'))->execute()->fetchCol();
+    }
+
+    // If key/value pair, search service users/ssoxs user table for pair,
+    // return uid.
+    else {
+      $query = db_select('ssoxs_users', 'u');
+      $query->join($service_users, 'n', 'u.uid = n.uid');
+
+      $db_or = db_or();
+      $db_or->condition('n.' . $queryobject->key, $queryobject->value, '=');
+      $db_or->condition('u.' . $queryobject->key, $queryobject->value, '=');
+
+      $uid  = $query->fields('n', array('uid'))
+        ->condition($db_or)
+        ->execute()
+        ->fetchField();
+      if ($uid) {
+        $uids[] = $uid;
+      }
+    }
+    ssoxs_db_reset();
+
+    // If true return user object as array, if false return empty array.
+    if (!empty($uids)) {
+
+      $return_array = array();
+      foreach ($uids as $uid) {
+
+        // Make ssoxs user object.
+        $ssoxsuser = new SsoxsUser($uid, NULL, $queryobject->machine_name);
+
+        // Prepare data array to return.
+        $user_array = $ssoxsuser->getUserArray();
+
+        // If service does not use Token based access, remove token balans from
+        // array.
+        if ($service->access_tokens == 0) {
+          unset($user_array['tokens']);
+        }
+
+        // Array values are encrypted using Blowfish before returning if the
+        // ssoxs_encryptall variable is true.
+        if ($service->encrypt_all) {
+          foreach ($user_array as $i => $k) {
+            $user_array[$i] = $crypt->encrypt($k);
+          }
+        }
+        $return_array[] = $user_array;
+      }
+
+      return $return_array;
+    }
+    else {
+      return array();
+    }
+  }
+  else {
+    ssoxs_db_reset();
+    return xmlrpc_error(1002, t('@mname service tables does not contain a column with name @key',
+      array(
+        '@mname' => $queryobject->machine_name,
+        '@key' => $queryobject->key,
+      )));
+  }
+}
+
+/**
+ * XML-RPC enabled function to update user subscription data for a service.
+ *
+ * - Check if the service machine name for which the authentication is
+ *   requested matches with IP restriction.
+ * - Check if the user is subscribed to the service.
+ * - Only allow updates of service specific attributes.
+ *
+ * @param array $userobject
+ *   User object for which to update information.
+ *
+ * @return array
+ *   User object matching query if found, else empty array.
+ */
+function _ssoxs_update($userobject) {
+
+  $machine_name = $userobject['machine_name'];
+  $updateuser = $userobject['user'];
+
+  // Get the service object.
+  $service = new SsoxsService();
+  $service->getServiceByMachineName($machine_name);
+  if ($service->encrypt_all) {
+    $crypt = new SsoxsBlowfish($service->api_key);
+  }
+
+  // Check if XMLRPC request came from an allowed IP. e.a the URL used to
+  // register the service.
+  if (!_ssoxs_xmlrpc_checkip(ip_address(), $machine_name)) {
+    return xmlrpc_error(1001, t('@ip: this address is not allowed to access this RPC service', array('@ip' => ip_address())));
+  }
+
+  ssoxs_db_connect();
+  $service_users = 'ssoxs_' . $machine_name . '_users';
+  $user = db_select($service_users, 'n')->fields('n')->condition('n.uid', $updateuser['uid'], '=')->execute()->fetchAssoc();
+  ssoxs_db_reset();
+
+  if ($user) {
+
+    // Check which key/value pairs need updating. Backtick quote the key name
+    // to prevent collision with reserved SQL keywords.
+    $update_array = array();
+    foreach ($updateuser as $key => $value) {
+      if (array_key_exists($key, $user) and $user[$key] != $value) {
+        $update_array["`$key`"] = $value;
+      }
+    }
+
+    if (!empty($update_array)) {
+      ssoxs_db_connect();
+      db_update($service_users)->fields($update_array)->condition('uid', $user['uid'], '=')->execute();
+      ssoxs_db_reset();
+    }
+
+    $ssoxsuser = new SsoxsUser($user['uid'], NULL, $machine_name);
+    if ($ssoxsuser) {
+
+      // Prepare data array to return.
+      $return_array = $ssoxsuser->getUserArray();
+
+      // If service does not use Token based access, remove token balans from
+      // array.
+      if ($service->access_tokens == 0) {
+        unset($return_array['tokens']);
+      }
+
+      // Array values are encrypted using Blowfish before returning if the
+      // ssoxs_encryptall variable is true.
+      if ($service->encrypt_all) {
+        foreach ($return_array as $i => $k) {
+          $return_array[$i] = $crypt->encrypt($k);
+        }
+      }
+
+      return $return_array;
+    }
+    else {
+      return array();
+    }
+  }
+  else {
+    return xmlrpc_error(1002, t('User with uid: @uid not subscribed to service: @mname',
+      array('@uid' => $updateuser->uid, '@mname' => $machine_name)));
+  }
+}

@@ -1,0 +1,487 @@
+<?php
+
+/**
+ * @file
+ * The main Single Sign On for eXternal Services .install file.
+ *
+ * - Important helper classes and functions are loaded from
+ *   includes/ssoxs_toolkit.inc.
+ */
+
+module_load_include('inc', 'ssoxs', '/includes/ssoxs_toolkit');
+
+/**
+ * Implements hook_requirements().
+ *
+ * - At install check existence of previous ssoxs tables in active database
+ *   Check existence of php mcrypt library required for Blowfish encryption
+ * - At runtime check database connection and access to web services for
+ *   translation of IP to country code.
+ */
+function ssoxs_requirements($phase) {
+
+  $requirements = array();
+  $t = get_t();
+  drupal_bootstrap(DRUPAL_BOOTSTRAP_DATABASE);
+
+  switch ($phase) {
+
+    case 'install':
+
+      // Get the name of the current active database connection and set as
+      // default database name for multi-database support. Current active db
+      // might be different then 'default'.
+      global $db_url;
+      $dbname = ltrim(trim(parse_url($db_url, PHP_URL_PATH)), "/");
+      ($dbname) ? variable_set('ssoxs_external_db_name', $dbname) : variable_set('ssoxs_external_db_name', 'default');
+
+      // Check if current active database has ssoxs tables.
+      if (db_table_exists('ssoxs_users')) {
+        $requirements['ssoxs_db_runtime'] = array(
+          'title' => $t('SSOXS database'),
+          'value' => $t('Successful connection to existing SSOXS database in: @dbname', array('@dbname' => $dbname)),
+          'severity' => REQUIREMENT_INFO,
+        );
+      }
+
+      // Check if the PHP mcrypt extension is loaded for Blowfish encryption.
+      if (extension_loaded('mcrypt')) {
+        $requirements['ssoxs_cr_runtime'] = array(
+          'title' => $t('SSOXS encryption support'),
+          'value' => $t('The PHP mcrypt extension is loaded, Blowfish encrypted API communication enabled'),
+          'severity' => REQUIREMENT_OK,
+        );
+      }
+      else {
+        $requirements['ssoxs_cr_runtime'] = array(
+          'title' => $t('SSOXS encryption support'),
+          'value' => $t('The PHP mcrypt extension is not loaded, no support for Blowfish encrypted API communication'),
+          'severity' => REQUIREMENT_ERROR,
+        );
+      }
+
+      break;
+
+    case 'runtime':
+
+      // Check connection to the ssoxs database tables at runtime.
+      $dbname = variable_get('ssoxs_external_db_name', 'default');
+      ssoxs_db_connect();
+      if (db_table_exists('ssoxs_users')) {
+        $requirements['ssoxs_db_runtime'] = array(
+          'title' => $t('SSOXS database'),
+          'value' => $t('Successful connection to existing SSOXS database in: @dbname', array('@dbname' => $dbname)),
+          'severity' => REQUIREMENT_OK,
+        );
+      }
+      else {
+        $requirements['ssoxs_db_runtime'] = array(
+          'title' => $t('SSOXS'),
+          'value' => $t('External SSOXS database: $db not setup correctly'),
+          'severity' => REQUIREMENT_ERROR,
+        );
+      }
+      ssoxs_db_reset();
+
+      // Check connection to internet services that provide geographical
+      // information for IP's.
+      $ip = ip_address();
+      if (@file_get_contents("http://www.geoplugin.net/json.gp?ip=$ip") or @file_get_contents("http://freegeoip.net/json/$ip")) {
+        $requirements['ssoxs_cc_runtime'] = array(
+          'title' => $t('SSOXS geolocation'),
+          'value' => $t('Geoplugin and freegeoip geolocation services online'),
+          'severity' => REQUIREMENT_OK,
+        );
+      }
+      else {
+        $requirements['ssoxs_cc_runtime'] = array(
+          'title' => $t('SSOXS geolocation'),
+          'value' => $t('Unable to connect to geoplugin or freegeoip geolocation services'),
+          'severity' => REQUIREMENT_ERROR,
+        );
+      }
+
+      break;
+  }
+
+  return $requirements;
+}
+
+/**
+ * Implements hook_install().
+ *
+ * - Reuse ssoxs database tables if found.
+ * - Synchronize the Drupal user table with the ssoxs_user table.
+ */
+function ssoxs_install() {
+
+  $install = FALSE;
+  $t = get_t();
+  drupal_bootstrap(DRUPAL_BOOTSTRAP_FULL);
+
+  // By default hook_schema is called by Drupal to install module database
+  // tables automatically.
+  // This module does not implement the hook and instead first searches for
+  // ssoxs database tables of a former install and uses these, else empty
+  // tables are created.
+  ssoxs_db_connect();
+  if ((db_table_exists('ssoxs_users')) && (db_table_exists('ssoxs_services'))) {
+    $message = 'ssoxs: database tables from previous install found, using them.';
+    $install = TRUE;
+  }
+  else {
+    db_create_table('ssoxs_users', ssoxs_users_schema());
+    db_create_table('ssoxs_services', ssoxs_services_schema());
+    db_create_table('ssoxs_idp_attrmap', ssoxs_attrmap_schema());
+    $message = 'ssoxs: database tables created.';
+    $install = TRUE;
+  }
+  ssoxs_db_reset();
+  drupal_set_message($t($message));
+
+  // If successful install of tables, always synchronize the Drupal users table
+  // with the ssoxs_users table.
+  if ($install) {
+    $result = _ssoxs_users_synchronize();
+    if ($result) {
+      drupal_set_message($t($result));
+      watchdog('ssoxs', 'ssoxs module install, synchronized drupal users table with ssoxs_users table');
+    }
+    else {
+      $install = FALSE;
+    }
+  }
+
+  // Report on install success.
+  ($install ? drupal_set_message($t('ssoxs: module installed successfully. Please set the permissions and configure the module')) :
+    drupal_set_message($t('ssoxs: module not installed.'), 'error'));
+}
+
+/**
+ * Implements hook_uninstall().
+ *
+ * - Customized uninstall based on user settings.
+ * - Keep or remove (default) SSOXS service, service user and servive
+ *   accounting tables
+ * - Keep or remove (default) SSOXS databse backups if created by the module
+ */
+function ssoxs_uninstall() {
+
+  // If ssoxs_uninstalltables is true (default): remove all the ssoxs_* tables
+  // from the currently defined database.
+  // For security reasons we will not query all available databases for ssoxs_*
+  // tables.
+  if (variable_get('ssoxs_uninstalltables', 1)) {
+    ssoxs_db_connect();
+    $tables_removed = 0;
+    $tables = db_query('SHOW TABLES')->fetchCol();
+    foreach ($tables as $table) {
+      if (strpos($table, 'ssoxs_') === 0) {
+        db_drop_table($table);
+        $tables_removed++;
+      }
+    }
+    ssoxs_db_reset();
+
+    drupal_set_message(t('ssoxs: module database tables removed.'));
+    watchdog('ssoxs', 'ssoxs module uninstall, droped %tablecount database tables', array('%tablecount' => $tables_removed));
+  }
+
+  // If ssoxs_uninstallbackups is true (default): remove the backup files
+  // generated by the module.
+  if (variable_get('ssoxs_uninstallbackups', 1)) {
+    $ssoxs_file_path = drupal_realpath(file_default_scheme() . '://') . '/ssoxs';
+    if (file_prepare_directory($ssoxs_file_path)) {
+      foreach (glob($ssoxs_file_path . '/*.*') as $file) {
+        @unlink($file);
+      }
+      @rmdir($ssoxs_file_path);
+
+      drupal_set_message(t('ssoxs: delete module generated files and folders.'));
+      watchdog('ssoxs', 'ssoxs module uninstall, removed ssoxs generated files and folders from: %path', array('%path' => $ssoxs_file_path));
+    }
+  }
+
+  // Remove ssoxs variables stored in the sites drupal database.
+  global $conf;
+  foreach (array_keys($conf) as $variable) {
+    if (strpos($variable, 'ssoxs_') === 0) {
+      variable_del($variable);
+    }
+  }
+}
+
+/**
+ * Implements Drupal database schema definition for the ssoxs_users table.
+ *
+ * - Not called automatically by hook_schema but subjected to custom install.
+ *
+ * @return array
+ *   Drupal database schema definitions.
+ */
+function ssoxs_users_schema() {
+
+  $schema = array(
+    'fields' => array(
+      'uid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'length' => 10,
+        'default' => 0,
+        'description' => 'User uid',
+      ),
+      'name' => array(
+        'type' => 'varchar',
+        'not null' => FALSE,
+        'length' => 60,
+        'description' => 'User name',
+      ),
+      'pass' => array(
+        'type' => 'varchar',
+        'not null' => FALSE,
+        'length' => 128,
+        'description' => 'User password hash',
+      ),
+      'mail' => array(
+        'type' => 'varchar',
+        'not null' => TRUE,
+        'length' => 254,
+        'description' => 'User email',
+      ),
+      'ip' => array(
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => FALSE,
+        'description' => 'Users current IP address, used to identify the user as logged in, NULL if not',
+      ),
+      'persistid' => array(
+        'type' => 'varchar',
+        'length' => 254,
+        'not null' => FALSE,
+        'description' => 'Persisted user identifier used in SAML based authentication',
+      ),
+    ),
+    'primary key' => array('uid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements Drupal database schema definition for the ssoxs_services table.
+ *
+ * - Not called automatically by hook_schema but subjected to custom install.
+ *
+ * @return array
+ *   Drupal database schema definitions.
+ */
+function ssoxs_services_schema() {
+
+  $schema = array(
+    'description' => 'Stores the ssoxs registered services',
+    'fields' => array(
+      'pid' => array(
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'Primary Key: Unique ID for service',
+      ),
+      'uid' => array(
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'description' => 'comma separated list of user uids that created the service entry',
+      ),
+      'machine_name' => array(
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'description' => 'Machine readable name of the service',
+      ),
+      'name' => array(
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'description' => 'Name of the service',
+      ),
+      'url' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'description' => 'URL of the service',
+      ),
+      'api_key' => array(
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'description' => '56 character Blowfish key for XML-RPC API encryption',
+      ),
+      'encrypt_all' => array(
+        'type' => 'int',
+        'length' => 'tiny',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'Encrypt all traffic between service and server. 0 False, 1 True',
+      ),
+      'description' => array(
+        'type' => 'text',
+        'serialize' => TRUE,
+        'not null' => TRUE,
+        'description' => 'A short description of the service',
+      ),
+      'rdate' => array(
+        'type' => 'int',
+        'length' => 'tiny',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'UNIX date and time stamp when the service was registered',
+      ),
+      'status' => array(
+        'type' => 'varchar',
+        'length' => 50,
+        'not null' => TRUE,
+        'default' => 'active',
+        'description' => 'Status of the service as: active, paused, stopped',
+      ),
+      'access_role' => array(
+        'type' => 'varchar',
+        'length' => 50,
+        'not null' => TRUE,
+        'default' => '2',
+        'description' => 'Portal access. Restriction based on Drupal user role. Registered users by default',
+      ),
+      'profile_fields' => array(
+        'type' => 'text',
+        'not null' => FALSE,
+        'description' => 'User profile fields required for the service to function. Stored as array.',
+      ),
+      'access_cert' => array(
+        'type' => 'int',
+        'length' => 'tiny',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'Portal access. Signup requires a valid grid certificate. 0 False, 1 True',
+      ),
+      'ca_url' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+        'description' => 'URL of the service able to validate the certificate',
+      ),
+      'access_approval' => array(
+        'type' => 'int',
+        'length' => 'tiny',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'Portal access. Signup needs approval. 0 False, 1 True',
+      ),
+      'access_license' => array(
+        'type' => 'int',
+        'length' => 'tiny',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'Portal access. Signup needs license agreement. 0 False, 1 True',
+      ),
+      'license' => array(
+        'type' => 'text',
+        'serialize' => TRUE,
+        'not null' => FALSE,
+        'description' => 'The license conditions to agree on',
+      ),
+      'access_tokens' => array(
+        'type' => 'int',
+        'length' => 'tiny',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'Service uses a Token based submission system. Mode: 0 (no use), 1 (use), 2 (use of trial), 3 (use for trial and access)',
+      ),
+      'initial_tokens' => array(
+        'type' => 'int',
+        'length' => 'small',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+        'description' => 'Initial number of Tokens assigned to the user account. Not set by default',
+      ),
+      'token_message' => array(
+        'type' => 'text',
+        'serialize' => TRUE,
+        'not null' => FALSE,
+        'description' => 'Message send to user once Tokens are nearly consumed',
+      ),
+      'vdata' => array(
+        'type' => 'text',
+        'serialize' => TRUE,
+        'not null' => FALSE,
+        'description' => 'Store variable data as serialized Drupal array',
+      ),
+    ),
+    'primary key' => array('pid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * MySQL schema definition for IdP specific attribute mapping table.
+ *
+ * @return array
+ *   Drupal database schema definitions.
+ */
+function ssoxs_attrmap_schema() {
+
+  $schema = array(
+    'fields' => array(
+      'aid' => array(
+        'type' => 'serial',
+        'description' => 'Attribute ID',
+      ),
+      'unique_id' => array(
+        'type' => 'int',
+        'length' => 'tiny',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'Attribute can be used as unique ID to map external users to local accounts',
+      ),
+      'idp' => array(
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'description' => 'Identity provider machine name',
+      ),
+      'name' => array(
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'description' => 'Drupal internal machine name of the attribute',
+      ),
+      'title' => array(
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'description' => 'Human readable attribute name',
+      ),
+      'uoid' => array(
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'description' => 'Universal object identifier for attribute',
+      ),
+      'extr_attr' => array(
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'description' => 'Attribute name provided by IdP',
+      ),
+    ),
+    'primary key' => array('aid'),
+  );
+
+  return $schema;
+}

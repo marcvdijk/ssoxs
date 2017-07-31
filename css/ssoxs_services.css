@@ -1,0 +1,45 @@
+/*
+ * single sign on for external services module
+ *
+ * css definitions for styling the service management page (adding/editing/deleting services)
+ * basic css styles for styling administration forms
+ */
+
+#ssoxs-service-vdata fieldset {
+  width: 95%;
+  border: none;
+}
+
+#ssoxs-service-vdata .vdata-wrapper {
+  position: relative;
+  margin-top: 20px;
+  padding: 20px;
+  width: 98%;
+  background-color: #eceef5;
+}
+
+#ssoxs-service-vdata	.delete-box {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+}
+
+#switch_edit-access-license,	/*hide the ckeditor ritch text and text filter options*/
+.textarea-identifier {
+  display: none !important;
+}
+
+#ssoxs-addservice-form .folded {
+  display: none;
+}
+
+#ssoxs-addservice-form fieldset,
+#ssoxs-settingsform fieldset {
+  border: 1px solid #c0c0c0 !important;
+  padding: 2em 1em !important;
+  margin: 1em 0 !important;
+}
+
+.ssoxs-validated input {
+  background-color: #39912d;
+}

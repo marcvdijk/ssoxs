@@ -1,0 +1,7 @@
+name = ssoxs
+description = Single Sign On for eXternal Services. Transform Drupal into a central user authentication, management and accounting service for external services.
+core = 7.x
+configure = admin/config/services/ssoxs
+dependencies[] = date
+files[] = ssoxs.module
+files[] = includes/ssoxs_toolkit.inc

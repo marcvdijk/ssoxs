@@ -1,0 +1,137 @@
+/*
+ * single sign on for external services module
+ *
+ * main css definitions for styling various ssoxs related pages
+ */
+
+
+/* General font and text styles */
+.ssoxs_notice {
+  font-weight: bold;
+  font-size: 150%;
+  text-align: center;
+  color: #b3b3b3;
+}
+
+.ssoxs_status_stopped {
+  color: #c8000b;
+}
+
+.ssoxs_status_active {
+  color: #39912d;
+}
+
+.ssoxs_status_paused {
+  color: #f0c874;
+}
+
+
+/* SSOXS specific table styles */
+.ssoxs_table {
+  position: relative;
+}
+
+.ssoxs_table tbody tr:hover {
+  background-color: #c5d9e6;
+}
+
+.ssoxs_table tr.row_pending {
+  background-color: #ffcf89;
+}
+
+.ssoxs_table td.admin {
+  width: 200px;
+  word-wrap: break-word;
+}
+
+.ssoxs_table td.stats {
+  background: url('../images/piechart_icon_off.png') no-repeat center center;
+}
+
+.ssoxs_table td.stats:hover {
+  background: url('../images/piechart_icon_on.png') no-repeat center center;
+}
+
+.ssoxs_table td.delete {
+  background: url('../images/delete_icon_off.png') no-repeat center center;
+}
+
+.ssoxs_table td.delete:hover {
+  background: url('../images/delete_icon_on.png') no-repeat center center;
+}
+
+.ssoxs_table td.edit {
+  background: url('../images/edit_icon_off.png') no-repeat center center;
+}
+
+.ssoxs_table td.edit:hover {
+  background: url('../images/edit_icon_on.png') no-repeat center center;
+}
+
+.ssoxs_table td.users {
+  background: url('../images/users_icon_off.png') no-repeat center center;
+}
+
+.ssoxs_table td.users a {
+  text-decoration: none;
+  font-weight: bold;
+  font-size: 1rem;
+  color: #c8000b;
+}
+
+.ssoxs_table td.users:hover {
+  background: url('../images/users_icon_on.png') no-repeat center center;
+}
+
+.ssoxs_table td.ssoxs_status_active,
+.ssoxs_table td.ssoxs_status_paused,
+.ssoxs_table td.ssoxs_status_stopped {
+  font-weight: bold;
+}
+
+.ssoxs_table td.vdata {
+  color: #a11a00;
+}
+
+.ssoxs_table td.stats a,
+.ssoxs_table td.edit a,
+.ssoxs_table td.users a,
+.ssoxs_table td.delete a {
+  display: block;
+  min-width: 30px;
+  width: 100%;
+  height: 30px;
+}
+
+.ssoxs_table .log {
+  display: block;
+  width: 24px;
+  height: 24px;
+  margin: -4px;
+  background: url('../images/message_icon.png') no-repeat center center;
+  cursor: pointer;
+}
+
+.ssoxs_table .log_display {
+  display: none;
+  cursor: default;
+  position: absolute;
+  padding: 20px;
+  left: 2%;
+  right: 2%;
+  background-color: #ffffff;
+  border: 2px solid #b3b3b3;
+  border-radius: 10px;
+  -moz-border-radius: 10px;
+  -webkit-border-radius: 10px;
+  -o-border-radius: 10px;
+  z-index: 20;
+}
+
+.ssoxs_table .log_display .close_btn {
+  float: right;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  background: url('../images/btn_close_x.png') no-repeat center center;
+}
