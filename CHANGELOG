@@ -1,0 +1,294 @@
+09-0402-14
+----------
+- Commit of the initial Drupal 7 version of the ssoxs module. All changes and
+  additions listed below.
+
+Drupal site structure changes:
+- Module settings change path from /admin/settings/* to /admin/config/*.
+  All path occurrences changed.
+- Modules need to categorized into groups representing there function.
+  SSOXS is grouped with the 'Services' group containing other modules working
+  with external services. The menu path of the SSOXS admin pages is changed to
+  reflect this grouping from /admin/config/ssoxs/
+  to /admin/config/services/ssoxs/
+- The file_directory_path method for retrieving the absolute path to the sites
+  default 'files' directory has been replaced by the file_default_scheme
+  function. Thus get absolute internal path to ssoxs files as:
+  drupal_realpath(file_default_scheme() . '://') . '/ssoxs'; - File operations
+   are database managed by default in Drupal 7. The ssoxs database backup
+   function creates and removes database sql files in an unmanaged fashion.
+   Replaced file_delete function with file_unmanaged_delete to enable this.
+
+Database API changes:
+- Database manipulation functions such as db_create_table, db_drop_field or
+  db_add_field no longer accepts and returns an array with status description
+  (.e.a finished=>0). All instances of this array as function input are removed.
+- Database db_column_exists function changed to db_field_exists.
+- Database API no longer uses INSERT, DELETE and UPDATE calls directly through
+  SQL queries but through dedicated objects (e.a. db_insert, db.delete and
+  db.update). Updated all.
+- The use of db_query("SQL query string") is discouraged in favour of the new
+  db_select framework. Convertd all db_query calls.
+- Drupal 7 automatically calles hook_schema to create database tables on install
+  SSOXS overrides this by first checking for existing ssoxs tables in the active
+  database before installing them.
+- Safely storing text is now handeled through php PDO database handlers by
+  serializing/unserializing the text. No longer a need to use
+  mysql_escape_string function.
+- The theme layer is greatly simplified in Drupal 7 allowing for less code to
+  accomplish the same. Simplified the ssoxs themed pages accordingly.
+
+Compliancy to Drupal coding standards:
+- White space: trailing line whitespaces removed, single newlines at end of
+  file, all Unix style newlines
+- Identation: 2 spaces no tabs
+- All binary operators enclosed in two whitespaces
+- One space between (type) declaration and its parameter
+- Checked all control structures: elseif instead of 'else if', one whitespace
+  between control keyword and opening parenthesis.
+- Always declare new class instance using the class name including parenthesis.
+- All functions have the module name as prefix to avoid namespace collisions.
+- All persistent variables have the module name as prefix to avoid namespace
+  collisions.
+
+Module functionality changes:
+- The Drupal 6 version of the modules asks the service administrator for the
+  service URL and IP. The latter is used to restrict XML-RPC access. In the
+  Drupal 7 version only the URL is asked and the IP associated to it is
+  dynamically fetched when needed by a function in the get_services class.
+  This ensures that the URL is the only persistent service identifier, the
+  service administrator can easily migrate the service to a different IP without
+  the need for an update of the service description.
+- Certificate validation. The GRID certificate validation requirement
+  implemented in the Drupla 6 version was a WeNMR specifc functionality.
+  It required validation by a dedicated external services which also required
+  access to the Drupal SSOXS database to register validated certificate
+  information. This type of certificate validation is hard to generalize.
+  Most certificate validation protocols require the certificate to be installed
+  on the same machine and hosted though Apache or similar webservers.
+  Such a setup can be involving and usually enables only one certificate at a
+  time to be validated which does not allow service specific certificate
+  validation. The Drupal 7 SSOXS version implements a simple service specific
+  certificate validation mechanism. The service administrator can define the
+  URL of an external web service capable of validating the certificate loaded
+  in the users browser. Upon service subscription the user is asked to validate
+  the certificate by clicking a button. This will trigger a AJAX call to the
+  external service on behalf of the user. Return true or false on certificate
+  validation. It is simple in the sense that is does not return any additional
+  information about the certificate such as expiry date but it's powerful in
+  that it enables simple but versatile and service specific certificate
+  validation. The only requirement is that the external service implements the
+  CORS (Access-Control-Allow-Origin) header definition to allow the AJAX call to
+  operate on behalf of the user.
+- Token based access. Now extended with a checkbox option to have tokens
+  function as a 'try-out' mechanism for the service. In this setup, initial
+  subscription by the user will not go to any additional requirement steps but
+  simply allow the user to try the service for the number of trials defined by
+  the initial token balans. When the trial token balans is depleted the user
+  will receive an email with instructions on how to proceed (email message can
+  be defined by the administrator). If the user decides to subscribe again, all
+  additional requirement steps come into action.
+- Add CSS class to SSOXS tables to help themers modify the look of SSOXS data
+  views.
+- Simplified internal database backup function and improved efficiency.
+  Makes daily backups by default until full month of backups have been made.
+  Then, save last daily backup as monthly backup and repeat daily backup
+  procedure. User can control number of monthly backups to keep till a maximum
+  of 120.
+- Run cron only once a day. Should be enough and prevents unnecessary stress
+  on the system.
+- The modules settings page is simplified. Easy swithc between storing data in
+  Drupals default local database or external databases configured in the sites
+  settings.php file. Enable ssoxs database table backup functionality if the
+  'backup and migrate' module is not active or the data is stored in an external
+  database. Enable SAML based federated login to the site. Only one identity
+  provider can be active at any time but the settings page allows for easy AJAX
+  enabled switching between IdP's configured in the simpleSAMLphp module and the
+  attribute mappings associated to that IdP.
+- External login using Federated Identity Managers implemented using SAML via
+  simpleSAMLphp is improved. Using more (AJAX enabled) validation steps, setting
+  up SAML on the module settings page is made easier and more robust. Although
+  only one identity provider can be used at any time, multiple IdP's can easily
+  be configured on the settings page each with it's own attribute mapping.
+  Linking external users to internal Drupal accounts using the attribute mapper
+  is made more robust; it is important that the module administrator selects
+  attributes that can truly be used to uniquely identify a user such as
+  persistent ID or email address. By default these are configured as such in the
+  attribute mapper. Multiple attributes can be configures as being unique
+  identifiers and all of them have to be evaluated as TRUE in the database
+  search for matching accounts. If multiple users are found, account creation
+  and login will not continue.
+- Added "Export as CSV" button to service user administration and job accounting
+  pages.
+
+Module XML-RPC API changes:
+- Data communicated between service and server as part of authenticate or
+  autologin functions is always BlowFish encrypted. Within the encrypted data,
+  the user password is send as plain text. the SSOXS module uses Drupal's
+  user_check_password function to do the hashing and compare with the stored
+  user password hash. Because Drupal 7 and higher uses a different hashing
+  method (sha512 default) and a server side defined salt, hashing the password
+  is best done at the server side to ensure that the correct hash is always
+  generated. NOTE: because of this, the default API classes shipped with the
+  ssoxs module (in php and python) have there methods changed accordingly.
+- Automatic login function (autologin) now uses a serialized Blowfisch encrypted
+  PHP array containing the machine name of the service for which authentication
+  is requested, the user UID and a time stamp. The full encrypted string needs
+  to be fetched from the URL by the service and send back to the server sing the
+  XML-RPC autlogin function. Autologin is session based with a validity of
+  15 minutes.
+
+08-08-2013
+----------
+- Data access and validation for the Add/Edit services form is now controlled
+  via the 'get_service' class (includes/ssoxs_classes.inc) which ensures that as
+  much as possible code related to this form is collected in one class.
+- Multiple services administrators are now allowed. Add them as comma separated
+  list using the AJAX autocomplete enabled text field. The autocomplete function
+  queries the user database and filters based on the ssoxs 'add any service'
+  privilege. Multiple administrators are stored as comma separated list of uid's
+  in the ssoxs_services table. The 'get_service' class loads the administrator
+  accounts based on these uid's which makes there email addresses automatically
+  available.
+- Remove the email address text field for the 'Signup requires administrator
+  approval' option. Became obsolete due to the improved way of handling
+  administrators in the 'get_service' class.
+- Accept both IP and URL for connection using XML-RPC calls. URL's are converted
+  to IP's, IP validation. IPv6 supported.
+- AJAX enabled the URL field. URL is validated and IP determined. IP address use
+  to fill IP field.
+- The module wide Blowfish encryption key used to secure service
+- server communication is replaced by a service specific API key. Users may
+  supply there own 56 character key or use the 'autogenerate key' button.
+  The latter calls the key autogeneration function on the server using AJAX and
+  puts the return value in the key text field.
+
+20-08-2013
+----------
+- Added watchdog functionality to various functions to log SSOXS event to the
+  Drupal log
+- Added the ability to implement a Token based subscription system to the
+  service registration page. Allows the service administrator to enable Tokens
+  based subscription for the service, assign new users an initial number of
+  Tokens and specify a message send to the user once the Tokens are nearly
+  consumed.
+- List multiple service administrators on the service overview page
+- Change the 'User accounting' icon on the overview page to show number of
+  pending users.
+- Show pending users first in the User management table with a orange-like row
+  color.
+
+23-08-2013
+----------
+- If the administrator of a service signs-up for the service, do not show the
+  subscription approval step if otherwise required.
+- Remove ip2nation database and make full use of the easy accessible
+  geoplugin.net or freegeoip.net (fallback) services for translation of IP
+  address to country code. Added watchdog to monitor access to the services.
+- Streamline user management page by passing the service object from form
+  creation to validation and submission clearing the need to pass service
+  machine_name as hidden object and recreate the service object again at form
+  validation and submission stage
+
+26-08-2013
+----------
+- Migrating the content of the SSOXS DB 'users' table to 'ssoxs_users' required
+  if we would like to insert the ssoxs tables in the regular Drupal SQL
+  database. Changed all calls to the 'users' table to 'ssoxs_users'.
+- Added a helper class to have a consitent representation of a SSOXS user
+  account. The class combines data from the standard Drupal users table with
+  data from the ssoxs user tabel and profile tables if they exist.
+- Adding support for the profile module in the user account helper class enables
+  the SSOXS module to work with a variable number of user account attributes.
+  By defining accpunt attributes using the Profile module and setting them as
+  required if needed, ensures that the account information communicated to
+  services always has the attributes requisted. A drupal user simply cannot
+  signup for services if his or her profile is not filled out with the required
+  account information.
+
+16-09-2013
+----------
+- Included SAML based federated login enabled via the SimpleSAMLphp library.
+  The SSOXS settings page has been extended with a fieldset allowing to
+  configure the module to offer SAML based login to the user next to standard
+  login. After definition of a valid path to the SimpleSAMLphp library, the
+  available identity providers defined in the configuration file of the library
+  are shown as selection dropdown. Only one IdP can be used at any time.
+- For each IdP, the module allowes to map external account attributes provided
+  by the IdP to local attributes defined in Drupal. The latter are standard
+  attributes that are a part of any user account (username, mail, Drupal role)
+  and attributes defined by the Profile module if enabled. The module allows
+  mapping using the standardized Object Identifiers OID scheme
+  (http://oid-info.com) and an alternative scheme. For each attribute, one can
+  specify if it attribute is a unqiue one that can be used to map the external
+  attribute to a locally stored account.
+- The system aims to always provide a local account for successfully
+  authenticated external users. This means we trust the IdP. In case of very
+  little provided attributes, a temporary username is made. A service however,
+  can specify that it requires a more elaborated attribute set to be made
+  available for instance for subscription approval. The attributes are username
+  and email by default and Profile module attributes set as 'required'. When the
+  user first authenticates using federated login a welcome message is displayed
+  informing the user if there are missing data in the profile and that is might
+  be required by services to provide them still in order to subscribe to the
+  service.
+- Federated login can be further customized by: forcing authentication to always
+  use HTTPS; Force authentication by always asking the user to enter a
+  username/password even in the same browser session; create the local account,
+  if disabled only user already having a local account that can be mapped to
+  external login are allowed to use federate login; and account persistence
+  which if disabled will remove the local account again when the user logges out
+
+18-09-2013
+----------
+- Include support for switching primary databases to store ssoxs data.
+  By default de main site database will be used and upon module install the
+  default SSOXS database tables (ssoxs_users and ssoxs_services) are created.
+- The settings page displays a selection dropdown with databases defined in the
+  sites Drupal settings.php page. Upon a switch of databases the module checks
+  connection and looks for any ssoxs database tables that migh be available in
+  the new database. If found, these will be used otherwise new empty tables will
+  be created. A message is displayed advising the administrator to synchronize
+  the user table using the 'synchronize' button available on the settings page.
+- All the module functions working with the database are natively aware of the
+  database defined.
+- As the module stores sensative and otherwise valuable user and accounting
+  data, it has native support for database backup that will operate on local or
+  external databases alike. If data is stored in the local database and the site
+  has the Backup and Migrate module enabled, than the backup functionality is
+  switched off as the Backup and Migrate module will take care of backups.
+- Module uninstall is further finetuned. The settings page provides two
+  switches; one for deleting all ssoxs database tables (services, users, and
+  accounting) and one for deleting the modules backup files.
+
+27-09-2013
+----------
+- Extended the service user management interface improving support for
+  management of larger sets of users by: supporting a paginated user tabel with
+  sortable columns. Enabling user filters, filtering on subscription data
+  including the variable arguments or searching for specific user with an AJAX
+  enabled username textfield. The latter also supports subscribing new users to
+  the service bypassing the 'My Services' interface of the users account.
+  The interface also allows communication with your user base by sending them a
+  notification email. Support for token based subscription is added if the
+  service uses this feature, the account balans of the user can be changed.
+- Added a cron job to check a users (grid) certificate expiry date. If expired,
+  and the user subscribed to services that require a valid certificate,
+  inactivate the users subscription and send them an email notifing them about
+  this and giving them a 30 days window to reenable the subscritption with a
+  valid certificate. If the 30 days passed, unsubscribe them.
+
+29-09-2103
+----------
+- Added a checkbox to the Drupal federate login fieldset on the settings page
+  enabling a cron check for inactivity of external accounts. This feature is
+  requested by some identity providers as part of the privacy policy. The cron
+  job will check the inactivity period. If past 5 month, an email will be send
+  notifing the user of imminent account removal. Email is only send once.
+  After 6 month the account is removed.
+
+04-10-2013
+----------
+- Changed the behaviour of the message logs on the service accounting page.
+  Instead of hovering over the icon and then showing the log, now clicking the
+  icon opens the log and clicking the close button closes it again.

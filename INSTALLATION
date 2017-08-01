@@ -1,0 +1,541 @@
+            Single Sign On for eXternal Services (SSOXS)
+
+Provided by: www.stickybits.nl
+Developed by: Marc van Dijk
+Support: mvdijk@stickybits.nl
+
+Licensing: This module is made available under the GNU
+  General Public License (GPL) Copyright:
+  2013, Marc van Dijk, Utrecht University, The Netherlands
+  2014, Marc van Dijk, StickyBits, Amersfoort, The Netherlands
+
+Acknowledgement: This module was developed as part of the WeNMR
+  project (European FP7 e-Infrastructure grant, contract no. 261572,
+  www.wenmr.eu) Version: 1.0
+
+SUMMARY
+--------------
+
+The Single Sing On for eXternal Services module, or SSOXS for short, extends
+Drupal to serve as a single-sign-on authentication, central user management and
+accounting service for external web servers or services.
+
+The module was originally developed for the academic community to provide a
+single-sign-on solution for independent academic web services and web services
+through a central Virtual Research Community. It can however be used by any
+community oriented Drupal site that hosts external web servers/services as part
+of there service and would like to enable these with:
+
+• An easy way for the community members to “subscribe” to the service and use
+  their Drupal or external credentials (through federate identification and
+  authorization) to gain access.
+• An easy way for external services to register their service with the community
+  website and enable singe-sign-on access for community members as well as
+  providing a set of interfaces to manage subscriptions and track usage through
+  an accounting and statistics interface.
+• A convenient XML-RPC driven Application Programming Interface (API) to enable
+  programmatic communication between the ssoxs module and the external services
+  for authentication, authorization and accounting.
+
+HOW IT WORKS
+---------------------
+
+The modules functionality is roughly divided into three parts each focusing on
+a different audience:
+
+1. The SSOXS administration pages: url <site name>admin/config/services/ssoxs.
+   This is the heart of the SSOXS module. Users with the right permissions can
+   register an external service here. The registration procedure provides the
+   service administrator(s) with a service specific API for programmatic
+   communication between the SSOXS module and the service as well as a number of
+   tools to fine-tune access and use of the service. After registration the
+   service administrator(s) can monitor the use of their service through
+   statistics and accounting interfaces and manage their user base through a
+   user management interface.
+2. A community oriented interface: the SSOXS module exposes a “My Services” page
+   as part of the user profile pages. This is the one-stop-place for a user to
+   "subscribe" to external services that are made available for the user through
+   their Drupal access privileges (their "Role" in Drupal terms). Rather or not
+   a service is made available to a Drupal Role as well as other subscription
+   requirements such as: valid certificates, administrator approval; agreement
+   to license terms or a token based access system are defined by the service
+   administrator (point 1).
+3. The SSOXS API interface: The SSOXS module provides an XML-RPC based interface
+   for external service to communicate with the module. The module provides
+   ready to use scripts in Python and PHP and because XML-RPC is a
+   well-established standard, nearly all major programming languages are XML-RPC
+   enabled. The API provides an easy interface for the external service to
+   automate the process of authentication, authorization and accounting.
+
+DEPENDENCIES
+-----------------------
+
+Depending on the configuration, the SSOXS module requires a few dependencies to
+be installed:
+• Date module version 7.x: https://drupal.org/project/date
+• XML-RPC communication requires the php-xmlrpc extension for PHP 5.0 or later
+  often installed by default. XML-RPC communication is controlled by Drupal’s
+  core XML-RPC functionality. For use of the API on the client side, XML-RPC
+  support libraries might need to be installed as well depending on the
+  programming language used.
+• The module offers the option for secure API communication using the BlowFish
+  encryption protocol. On the server side this functionality requires the
+  php-mcrypt extension. On the client side this is programming language
+  dependent. For Python for example, the PyCrypto library is an excellent choice
+  (https://www.dlitz.net/software/pycrypto/).
+• If the module is configured to support federate authentication using SAML, a
+  proper installation of the simpleSAMLphp library is required
+  (http://www.simplesamlphp.org).
+• Web service dependencies: the module makes use of several external web
+  services to provide some functionality. The accounting service tracks service
+  usage by IP address. Conversion of the IP address to a country code makes use
+  of one of the two following web services: http://www.geoplugin.net or
+  http://freegeoip.net. Either one of these will be used, if both of theme are
+  unavailable no IP translation takes place. The analytics reports page makes
+  use of the Google charts API to visualize accounting statistics in graphs
+  (https://developers.google.com/chart).
+
+The module dependencies will be checked automatically as part of Drupal’s
+module install procedure.
+
+INSTALLATION
+---------------------
+
+The SSOXS module is configured to provide basic functionality out of the box
+following the common Drupal module installation scheme:
+
+1. Download the latest stable release of the SSOXS module for your Drupal
+   distribution from the Drupal module repository.
+2. Extract the zipped tarball (.tgz) or zip (.zip) archive in your sites module
+   directory (/sites/all/modules).
+3. Go to the Drupal “modules” page (<base url>/admin/modules) and enable the
+   “ssoxs” module.
+
+Done! Now continue with the configuration of the module
+
+CONFIGURATION
+-------------------------
+
+Permissions Control role based access to the SSOXS administration interface and
+“My Services” page through Drupal’s permissions interface (<base
+url>/admin/people/permissions).
+
+Settings:
+• Administer module: which role is able to see (view) the main SSOXS module
+  administration interface and who is able to edit the modules settings.
+  NOTE: Ensure to grant these privileges to trusted roles only.
+• Edit My Services: which role is able to subscribe to SSOXS enabled services
+  through the “My Services” page of the user profile pages.
+• View/Add/Edit or Delete services: administration of external services is
+  subjected to fine-grained control implemented through role based and user
+  account based access permissions:
+  o Define which role is able to add services
+  o By default the users assigned as administrators of the services are allowed
+    to view, edit and delete the service. Administrators of a service are not
+    allowed to view, edit or delete other services by default.
+
+You may overrule this behaviour by granting certain roles the privileges of
+viewing, editing or deleting ‘any’ service. In addition you may grant service
+administrators belonging to a particular role toprivilege to only view but not
+edit or delete ‘own’ services.
+
+Configuration Module configuration options in the SSOXS module settings page
+(<base url>/admin/config/services/ssoxs/settings):
+
+SSOXS database settings As with most modules, the SSOXS module makes use of the
+default Drupal database to store its data. This is enabled by default. But,
+because the module deals with sensitive and often valuable user credentials and
+accounting information it offers the option to work with another (external)
+database. Properly configured databases defined in the
+sites/default/settings.php file will appear automatically in the “External
+database” selection dropdown. Drupal’s default database called ‘default’ is set
+by default.
+
+The sensitive and valuable nature of the data also mean that the SSOXS database
+tables might want to be preserved during the modules uninstall process (see
+section about uninstall). For this reason the modules performs a check at
+install time or at a switch database for the presence of SSOXS database tables.
+If found these will be used and any service and user information they contain
+becomes available.
+
+The SSOXS module is equipped with basic database backup functionality that is
+made available if the "backup and migrate" module is not enabled or if an
+external database is used. The module will create a daily backup for one full
+month, save the last daily backup as monthly backup and repeat the cycle. The
+interface allows you to set the number of monthly backups to keep (12 by
+default, 120 maximum). Manual backups can be made at any time and the latest
+backup can be downloaded from the settings page.
+
+The SSOXS module maintains its own copy of the main sites user table and adds
+data to it. The synchronization process is fully automated by default but when
+there is a change in database it might be required to manually synchronize the
+database using the “Synchronize ssoxs” button.
+
+Drupal federated login The SSOXS module integrates with the excellent
+simpleSAMLphp library to provide SAML based federate login functionality to the
+whole site. This feature enables users to login to your site using their
+institutions credentials for instance. SAML based federated login is not
+activated by default. Enabling it first of all requires a functional
+installation of the simpleSAMLphp library according to the installation and
+configuration options of the library. If setup successfully, enter the absolute
+path to the library in the designated text field. The library will be validated
+automatically and the configured identity providers will be available in the
+selection dropdown. Although multiple identity providers can be configured only
+one may be active at any time. Configuration options for the identity provider
+allow you to:
+
+• Perform attribute mappings: the SAML authentication procedure enables the
+  identity provider (IdP) to share user information with the SSOXS module after
+  successful authentication in the form of “attributes”. The number of
+  attributes made available and the name they have may vary by IdP. Attribute
+  mapping aims to provide a consistent translation of attributes shared by the
+  IdP and the Drupal user profile attributes. The attribute-mapping table of the
+  SSOXS module lists the attributes that are a default part of the user profile
+  such as user name and email and all attributes defined by the profile module.
+  These internal attributes can be mapped against IdP provided ones using the
+  UID Object Identifier schema (http://oid-info.com) and/or an alternative
+  schema. For each of the mapped attributes you may indicate if it is a unique,
+  persistent identifier and can thus be used to identify external users that
+  have used federate login to authenticate themselves once before and link these
+  users to there local account if available.
+• Role assignment: which role will be assigned to external users upon account
+  creation. By default the “authenticated user” role is assigned.
+• Force SAML connection to use HTTPS: by default the HTTP communication settings
+  of the site are used, secured or not. Force to use HTTPS will rewrite the SAML
+  connection URL to use HTTPS instead of HTTP.
+• Force authentication: Always force SAML authentication. If the user has been
+  authenticated before and the session is still active the user is required to
+  authenticate again
+• Create a local account: rather or not to create a local Drupal account for the
+  external user after successful authentication. For privacy reasons this might
+  sometimes not be allowed by your IdP for instance. It should be clear that
+  without a local account the user is unable to subscribe to any ssoxs services.
+• Persist local account: again for privacy reasons your site may not be allowed
+  to store user account information after the user has logged out. Ticking this
+  checkbox will remove the users account after logout.
+• Remove inactive accounts: The last privacy related option involves removal of
+  user accounts that have shown no activity for a period of 6 month. If checked,
+  the module will send the user an email informing them of the upcoming account
+  inactivation and removal 1 month in advance. The user may postpone account
+  removal by a simple login to the site.
+
+OVERVIEW OF SSOXS SERVICES
+------------------------------------------------
+
+All services registered to make use of the functionality that SSOXS has to
+offer are listed on the front administration page of the module at: <base
+url>/admin/config/services/ssoxs.
+
+For a fresh install with an empty ssoxs database the service overview page will
+not list any services. Continue reading the section “Enabling SSO for an
+external service” to learn how to add services. If an install makes use of an
+already existing ssoxs database the overview page will list the available
+services as a table containing:
+
+• ID: the unique service numerical identifier
+• URL: linking the service name to its external location URL
+• Status: the active status of the service as “active”, “paused” or “stopped”.
+• Registration date: the date the service was registered with the SSOXS module.
+• Administrators: one or more service administrators linking to there account
+  pages.
+• Users: the number of users subscribed to the service.
+• Operations: icons linking to the service administration and management pages.
+
+Depending on the current users permission settings the icons exposed link to:
+service administration page, user subscription management page, service
+statistics page and service removal page. The user management page and thus it’s
+icon, will not be available for those service that do not require a user to
+subscribe but do want to make of the accounting service of SSOXS module.
+
+ENABLING SSO FOR AN EXTERNAL SERVICE
+-----------------------------------------------------------------
+
+Drupal users with the permission “Add services” (see permissions section)
+enabled can add new services to the SSOXS service registry by visiting: <base
+url>/admin/config/services/ssoxs/add_service.
+
+Steps for adding a service Basic service information:
+• Service name: Name of your service visible to the user
+• Service URL: URL of the service, will be validated real-time.
+• Service administrators, list of Drupal users with access to the service
+  administration pages (AJAX enabled)
+• The public status: Active by default. A paused or stopped status will not
+  allow the sites user to subscribe to the service and it does not allow
+  subscribed users access using SSO authentication. Useful when the service is
+  temporarily unavailable for maintenance for example. The service status can
+  also be changed using the XML-RPC API.
+• Service description: Short description of the service. Will be shown on the
+  users "My Services" page
+
+Roles: Specify which roles are able to make use of the service. By default all
+authenticated user will be able to signup for the service. An anonymous user
+will open the service to everybody and thus requires no authentication but you
+can still use the accounting functionality.
+
+User profile information: User profile information required by the service to
+perform its function. Be conservative with the information you request to
+respect user privacy. The user is informed and has to agree with the personal
+data that will be shared upon service subscription.
+
+XML-RPC API key: The SSOXS module makes use of a service specific API key to
+secure the XML-RPC based communication between the service and the module using
+BlowFish encryption technology. The unique API key may be entered manually in
+the API key field or can be autogenerated using the “Autogenerate key”. By
+default only the authorization request is encrypted but using the “Encrypt all
+traffic” checkbox, all XML-RPC communication is encrypted.
+
+Signup requirements: Acquiring a subscription to a service may be subjected to
+a number of additional requirements other than having a Drupal account and
+sufficient permissions in terms of Drupal roles. The SSOXS module offers
+service administrators 5 additional requirement settings for their service
+which will be shown to the user on there ‘My Services’ page as requirement
+steps during the subscription process:
+
+• Valid GRID certificate: this specific requirement was added for the academic
+  audience the module was originally developed for. Users where required to have
+  a valid X.509 grid certificate loaded into there browsers in order to perform
+  calculation on the word-wide science computer grid. This service is still
+  available in a simplified and general form. Provide a url of a website or
+  service able to validate a certificate loaded in the users browser. The user
+  is requested to click a button to validate the certificate. AJAX is used to
+  contact the url on behalf of the user to validate the certificate.
+  This feature requires the CORS (Access-Control-Allow-Origin) protocol to be
+  enabled on the url performing the validation.
+• Administrator approval: if checked, the subscription request is first placed
+  in ‘pending’ mode and the service administrator is notified by the
+  subscription request by mail. The email lists the data of the user requesting
+  subscription, a link to the users profile and a link to the user management
+  page for the service. If approved, the latter page allows the administrator to
+  change the subscription status from ‘pending’ to ‘active’ or alternatively
+  ‘inactivate’ or ‘delete’ the request if not approved.
+• License terms: if the use of a service is subjected to a license agreement,
+  this option allows entering the license text in the text area. The license is
+  subsequently shown on the ‘My Services’ page as part of the subscription
+  procedure with an ‘agree to license agreement’ checkbox.
+• Token based access: the use of access tokens provides the service
+  administrators with the means to control quantitative access to the service.
+  1 token provides a 1 time access to the service. Tokens may serve to limit
+  excessive use of the service or for implementation of a payment model for
+  example. Choosing this option will allow the administrator to grant new users
+  an initial number of tokens to start with to test the service of instance.
+  A users token balance can be changed on the User management page of the
+  service and it is displayed in the users ‘My Services’ page. If the token
+  balance drops below 5 the user is notified by mail on how to upgrade his/her
+  balance using the procedure entered in the text area “Message send to the user
+  when the service Tokens are nearly consumed”. If all tokens are used, the
+  authentication procedure will fail to authenticate.
+• Additional user information: The default user information available for a
+  Drupal registered user might not be enough to grant access to the service.
+  The site can make use of the Profile module to collect these required bits of
+  information and such data can subsequently be validated using the
+  “administrator approval” requirement mentioned above. However, these required
+  Profile fields can be bypassed is the site makes use of different
+  authentication and authorization mechanism such as federate login or social
+  media login. Checking obligatory use profile fields will ask the user to first
+  fill out the Profile fields in the user account before subscription to the
+  service is possible.
+
+Variable data fields: Using variable data fields, the service administrator can
+store additional custom attributes with the users subscription record.
+Supported data fields are; text fields, integer fields and selections. Data for
+these fields appear on the user management page for the service and can be
+edited there. The custom data fields key/value pairs are included in the user
+object returned by the XML-RPC API.
+
+CONFIGURING API BASED COMMUNICATION
+-----------------------------------------------------------------
+
+Your service needs to be extended with the capability to make XML-RPC calls to
+your Drupal website running SSOXS to make use of Single Sign On authentication,
+central user management and accounting. XML-RPC libraries are available for all
+popular programming languages either build-in or installable as additional
+libraries/modules. The SSOXS module is shipped with ready to use classes for
+PHP and Python based services (look in the ‘connection_scripts’ directory of
+the module).
+
+Using the provided PHP and Python classes is described below. The procedure is
+similar in case of other programming languages.
+
+1. If your service is written in Python or PHP, install the ssoxs_connect.py or
+   ssoxs_connect.php files respectively. Enable the included class in your
+   services main logic as:
+
+   Python: from ssoxs_connect import ssoxs_connect PHP : include
+   "ssoxs_connect.php";
+
+   IMPORTANT: The Python class requires the PyCrypto library for Blowfisch
+   encryption/decryption (https://www.dlitz.net/software/pycrypto/). The PHP
+   class requirtes the php-xmlrpc and php-mcrypt extensions.
+
+2. Encrypted communication using Blowfisch requires a private key to be
+   included in the Python or PHP class. This is the API key used/generated at
+   service registration using the ‘Add service’ form. Copy the key and use it as
+   value for the 'key' argument in the class constructor (replace the
+   '<The secret key>' line).
+
+3. Implementing authentication: use the 'authenticate' function in the Python
+   or PHP class. Full description of the function can be found in the doc string
+
+   Python usage: sso = sso_connect(<service machine name>) auth =
+   sso.authenticate(username, userpass=password) if auth: print sso.user
+
+   PHP usage: $sso = new ssoxs_connect(<service machine name>); $auth =
+   $sso->authenticate($username, $password); if ($auth): print_r(sso->user);
+
+   Details: Both classes are initiated using the machine name of the server.
+   This is a lower case version of the service name with white spaces replaced
+   by underscores. The machine name is also displayed below the service name on
+   the service administration page. The password can be defined either as MD5
+   hash or as plain text. In the latter case, the password is hashed by the
+   function. The authenticate function returns TRUE or FALSE for successful
+   authentication and registers the user object in the classes 'user' attribute.
+   The latter is a dictionary for Python and an array for PHP.
+
+   The user object contains the following data as key/value pairs:
+   - uid: Unique user ID as used by the Drupal web site
+   - name: username used by the Drupal web site
+   - mail: users email address
+   - ip: if the user is logged into the Drupal web site the current IP
+     address is stored.
+   - subscription: the subscription status of the user for the service
+   - rdate: UNIX time stamp of the date the user subscribed to the service
+   - Any custom data fields is defined
+
+4. Automatic login: use the 'autologin' function in both classes to enable a
+   true Single Sign On experience in your service. For this you need to fetch
+   the value of the 'sso' variable from the URL. This is user specific encrypted
+   string attached to the URL by the Drupal website. It contains the users grid
+   certificate DN, the users IP and a unix timestamp. the 'autologin' function
+   returns the encrypted string to the SSOXS module for validation (is the user
+   valid, is the user logged in) and returns the user object. This SSO type of
+   login is currently only available when the user navigates to the service from
+   the "My Services" page.
+
+   The function works in a similar manner as the 'authenticate' method described
+   in point 2. Needless to say that your services requires a valid certificate
+   as part of the subscription procedure.
+
+5. Accounting: Use the 'accounting' function in both classes to account job
+   activity with the SSOXS module. Accounting is optional although highly
+   recommended.
+
+   Python usage: sso = sso_connect(<service machine name>) acc =
+   sso.accounting(uid=<user uid>, ip=<user ip>, jid=<job id>,
+   status=<job status>, message=<message>, url=<url>)
+
+   PHP usage: $sso = new ssoxs_connect(<service machine name>); $acc =
+   $sso->accounting($<user uid>, $<user ip>, $<user jid>, $<job status>,
+   $<message>, $<url>);
+
+   Details: Nearly all data fields stored in the accounting database can be set
+   using the arguments of the functions displayed above. The arguments are
+   optional in nearly all cases. Defaults are set by the server. The function
+   will return the new or updated accounting record as dictionary or array.
+   Description of the arguments and their defaults:
+
+   1. uid: The unique user ID used by the Drupal site. If no uid is defined the
+      server will log the job using uid 0 which equals the anonymous user.
+      As such, service that do not require authentication can still use the
+      accounting functionality. The users uid is part of the user object
+      returned by the SSOXS module upon successful authentication.
+   2. ip: The user IP address. Used for demographic statistics.
+   3. jid: IMPORTANT! The jid is the unique job identifier and it is used a the
+      basic index key to track jobs in the accounting database. If you use
+      integer job identifiers in your service you can use the same for
+      accounting provided the jid remains unique. The server will always check
+      if the jid is not already in use in the database and return a different
+      unique one in case. So always check the dictionary or array with account
+      information that is returned by the server. If you define no jid, the
+      server will return one for you.
+   4. status: The status of the job defined as integer using the same schema
+      as glite: 0 = submitted, 1 = waiting, 2 = ready, 3 = scheduled,
+      4 = running, 5 = done, 6 = cleared, 7 = failed. Set to 0 by default.
+
+   NOTE: if you use ‘token based access’ for your service, the users token
+   balance will be lowered by one if the job status equals ‘done’, ‘cleared’ or
+   ‘failed’.
+
+   5. message: An optional log message. Every subsequent log message will be
+      formatted by the SSOXS module and added to the growing log.
+   6. url: An optional URL of the services result web page or download location.
+
+The SSOXS module will process the data for accounting, adding the job start
+date for new jobs and finish date for 'done', 'cleared' or 'failed’ jobs. Users
+IP address will be translated to a country code.
+
+USER MANAGEMENT AND ACCOUNTING
+-----------------------------------------------------------
+
+User management interface The module offers a user management interface for
+each service at <base url>/admin/config/services/ssoxs/<service id>/users that
+lists users in a paged table. The interface offers powerful filtering and query
+functionality for easy user management including:
+
+• Sorting table columns by clicking the column header
+• Using the “Filter users” button to filter based on user attribute values set
+  in the “Edit user subscriptions” field set including the defined variable
+  data fields.
+• Search for users using the autocompleted user search field.
+
+Subscription data for one or multiple users can be changed at once by ticking
+the “Edit” checkbox or use the “Select all users” checkbox.
+
+The “Search users by user name” text field also allows the administrator to
+quickly subscribe a Drupal registered user. This will bypass the general
+subscription procedure on the users “My Services” page including all
+requirements.
+
+Finally, the user management allows the service administrator to easily contact
+all or a selected number of users by email.
+
+Accounting and service statistics Like the user management interface, the
+module offers a accounting interface at <base
+url>/admin/config/services/ssoxs/<service id>/jobs. The accounting table lists
+all service requests issued by members of the site or anonymous users at the
+external service. The data in the table is mostly provided by the external
+service using the accounting function of the XML-RPC API. The service is thus
+responsible for providing the correct information. The table lists:
+
+• A unique job identifier: generated by the module or provided by the service.
+  In the latter case the module will always determine if the identifier is
+  indeed unique. NOTE: If not it will return a different one so please check
+  for this.
+• The users name derived from the UID linked to the users profile. Service
+  requests issued by users not registered with the site can still be accounted
+  for by using user 0, the Drupal anonymous user.
+• Job status as either: submitted, waiting, ready, scheduled, running, done,
+  cleared or failed.
+• Start date: automatically set when the request is registered
+• End date: finish date of the job is set if the status equals done, cleared or
+  failed.
+• Logs: the accounting API offers a rich logging functionality (see API).
+  The real-time logs can be viewed by clicking the log icon if available.
+
+As with the user management interface, the accounting table is paged and has
+sortable columns. The table can also be filtered by time period and user.
+
+A nice, reportable, overview of accounting statistics is available on the
+statistics page at <base url>/admin/config/services/ssoxs/<service
+id>/statistics. Statistics such as the number of jobs per week, jobs by user
+and the geographic distribution of the users among others is displayed using
+graphs generated using the Google Charts API. Statistics can be filtered by
+time period.
+
+UNINSTALL
+----------------
+
+Module uninstall follows the same procedure as is common for Drupal modules but
+it offers some fine tuning in addition. The settings page (<base
+url>/admin/config/services/ssoxs/settings) provides two additional options for
+uninstall:
+
+• Delete user and service tables: information about configures services, the
+  users subscribed to them and the accounting information is potentially
+  valuable and is not be deleted by default when uninstalling the module.
+  Ticking the checkbox will removing them, not recommended. Also, deleting a
+  single service from the database enables the service administrator to choose
+  rather or not to delete all service data or preserve user and accounting data.
+• Delete database backups: if the site is not equipped with the
+  “Backup and Migrate” module, the SSOXS module will make periodic backups in
+  the /files/ssoxs. This directory will be deleted by default upon module
+  uninstall, uncheck the checkbox to prevent deletion.
